@@ -79,3 +79,37 @@ def chargers():
 def near(items, lat, lon, radius_m=3000, k=3):
     found = sorted(((haversine(lat, lon, c["lat"], c["lon"]), c) for c in items), key=lambda x: x[0])
     return [{**c, "distance_m": round(d)} for d, c in found if d <= radius_m][:k]
+
+
+# Occupancy history: the registry only publishes availability *now*, so we keep our own 10-minute samples
+# (in the presence store: Upstash Redis on Vercel, memory locally) to draw today's curve.
+HISTORY_KEY, SAMPLE_S, KEEP_S, NEAR_M = "ev:occupancy", 600, 26 * 3600, 6000  # NEAR_M: the app's EV page radius
+
+
+def occupancy(items):
+    """% of working points in use within NEAR_M of the centre; stations with every point down don't count."""
+    total = free = 0
+    for c in items:
+        down = c["status"].get("ev_out_of_order", 0) + c["status"].get("ev_unknown", 0)
+        if haversine(CENTER[0], CENTER[1], c["lat"], c["lon"]) > NEAR_M or (not c["available"] and down >= c["points"]):
+            continue
+        total, free = total + c["points"], free + c["available"]
+    return round(100 * (1 - free / total)) if total else None
+
+
+def record_occupancy(items, now, redis):
+    """Save one sample per 10-minute slot (the INCR on the slot key lets only the first request through)."""
+    pct = occupancy(items)
+    if pct is None:
+        return False
+    slot = f"{HISTORY_KEY}:slot:{int(now) // SAMPLE_S}"
+    if redis(["INCR", slot], ["EXPIRE", slot, SAMPLE_S * 2])[0] != 1:
+        return False
+    redis(["ZADD", HISTORY_KEY, int(now), f"{int(now)}:{pct}"], ["ZREMRANGEBYSCORE", HISTORY_KEY, "-inf", int(now - KEEP_S)])
+    return True
+
+
+def occupancy_history(now, redis):
+    """Last 24 h of samples, oldest first: [{"time": epoch_s, "occupancy": %}]."""
+    rows = redis(["ZRANGEBYSCORE", HISTORY_KEY, int(now - 24 * 3600), "+inf"])[0] or []
+    return [{"time": int(t), "occupancy": int(p)} for t, p in (m.split(":") for m in rows)]

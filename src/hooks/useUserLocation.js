@@ -9,6 +9,8 @@ const set = (next) => {
   listeners.forEach((f) => f())
 }
 
+export const currentPosition = () => state.pos // for non-React code (e.g. the chat request)
+
 export function locate() {
   if (!navigator.geolocation) return set({ pos: null, status: 'denied' })
   set({ ...state, status: 'locating' })

@@ -20,6 +20,39 @@ const NEARBY_COUNT = 5
 // Distances are measured from Syntagma Square until the user shares their location
 const SYNTAGMA = { lat: 37.9755, lng: 23.7348 }
 const pick = (obj, lang) => (typeof obj === 'string' ? obj : (obj?.[lang] ?? obj?.en))
+const HALF_MIN = 30 * 1000
+
+// Next departures at one station, per line and direction (official STASY timetable: an estimate, no live data)
+function NextTrains({ station, lineById, name }) {
+  const { t } = useLang()
+  const deps = useApi(api.getDepartures, [station.id], { refreshMs: HALF_MIN })
+  return (
+    <Card title={`${t('transit.nextTrains')} · ${name}`} bodyClassName="px-3 py-2 sm:px-4">
+      {deps.loading ? (
+        <ListSkeleton rows={3} />
+      ) : deps.error ? (
+        <ErrorState error={deps.error} onRetry={deps.reload} />
+      ) : (
+        <>
+          <ul className="divide-y divide-line">
+            {deps.data.departures.map((d) => (
+              <li key={`${d.line}|${d.towards}`} className="flex items-center gap-3 py-2.5">
+                <LineBadge line={lineById[d.line]} />
+                <span className="min-w-0 flex-1 truncate text-sm text-ink">{d.towards_en}</span>
+                <span className="text-sm font-semibold tabular-nums text-ink">
+                  {d.in_min.length
+                    ? d.in_min.map((m) => (m === 0 ? t('transit.now') : t('transit.inMin', { n: m }))).join(' · ')
+                    : t('transit.noMore')}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="pt-2 text-xs text-muted">{t('transit.estimated')}</p>
+        </>
+      )}
+    </Card>
+  )
+}
 
 export default function Transit() {
   const { t, lang } = useLang()
@@ -29,15 +62,17 @@ export default function Transit() {
   const { pos, status, locate } = useUserLocation()
   const { mapRef, focus, focusOn, clearFocus } = useMapFocus()
   const [mode, setMode] = useState('metro')
+  const [stepFreeOnly, setStepFreeOnly] = useState(false)
 
   const origin = pos ?? SYNTAGMA
   const nearby = useMemo(
     () =>
       (stations.data ?? [])
+        .filter((s) => !stepFreeOnly || s.stepFree)
         .map((s) => ({ ...s, dist: distanceM(origin, s) }))
         .sort((a, b) => a.dist - b.dist)
         .slice(0, NEARBY_COUNT),
-    [stations.data, origin],
+    [stations.data, origin, stepFreeOnly],
   )
   const lineById = useMemo(() => Object.fromEntries((lines.data ?? []).map((l) => [l.id, l])), [lines.data])
 
@@ -60,6 +95,7 @@ export default function Transit() {
           lng: s.lng,
           label: `${pick(s.name, lang)} · ${formatDist(s.dist)}`,
           color: lineById[s.lines[0]]?.color ?? '#94a3b8',
+          badge: lineById[s.lines[0]]?.label,
         }))}
         overlay={
           <div>
@@ -87,6 +123,15 @@ export default function Transit() {
           }
         >
           {status === 'denied' && <p className="pt-2 text-xs text-muted">{t('transit.locationOff')}</p>}
+          <button
+            onClick={() => setStepFreeOnly((v) => !v)}
+            aria-pressed={stepFreeOnly}
+            className={`mt-2 rounded-full px-3 py-1 text-xs font-semibold transition ${
+              stepFreeOnly ? 'bg-primary text-white' : 'bg-primary/10 text-primary-dark dark:text-primary-light'
+            }`}
+          >
+            {t('transit.stepFreeOnly')}
+          </button>
           {stations.loading ? (
             <div className="py-3">
               <ListSkeleton rows={4} />
@@ -106,6 +151,11 @@ export default function Transit() {
                       <span className="ms-1 text-xs text-muted">
                         {formatDist(s.dist)} · {t('transit.walk', { m: walkMinutes(s.dist) })}
                       </span>
+                      {s.stepFree && (
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary-dark dark:text-primary-light">
+                          {t('transit.stepFree')}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <LocateButton
@@ -213,6 +263,8 @@ export default function Transit() {
           <p className="mt-3 text-[11px] leading-snug text-muted">{t('transit.source')}</p>
         </Card>
       </div>
+
+      {nearby[0] && <NextTrains station={nearby[0]} lineById={lineById} name={pick(nearby[0].name, lang)} />}
 
       <ScrollHint />
     </div>

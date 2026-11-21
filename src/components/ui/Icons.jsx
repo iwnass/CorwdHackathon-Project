@@ -42,6 +42,12 @@ export const ChatIcon = (p) => (
 export const EvChargerIcon = (p) => (
   <svg {...base} {...p}><path d="M14 20V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v15" /><path d="M2 20h13" /><path d="M9.5 7l-2 3.5h3l-2 3.5" /><path d="M14 9h2a2 2 0 0 1 2 2v4a1.5 1.5 0 0 0 3 0V8l-3-3" /></svg>
 )
+export const ParkingIcon = (p) => (
+  <svg {...base} {...p}><rect x="3" y="3" width="18" height="18" rx="4" /><path d="M9.5 17V7h3.5a3 3 0 0 1 0 6H9.5" /></svg>
+)
+export const ChevronDownIcon = (p) => (
+  <svg {...base} {...p}><path d="m6 9 6 6 6-6" /></svg>
+)
 export const MapPinIcon = (p) => (
   <svg {...base} {...p}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z" /><circle cx="12" cy="10" r="3" /></svg>
 )

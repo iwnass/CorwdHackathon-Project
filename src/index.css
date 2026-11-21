@@ -115,6 +115,57 @@ body {
     drop-shadow(0 -2px 0 #fff) drop-shadow(0 6px 8px rgba(0, 0, 0, 0.45));
 }
 
+/* "Find My"-style current-location dot on the map (MapPlaceholder) */
+.locate-dot {
+  /* MapLibre positions markers via a transform on this exact element and expects it
+     absolutely positioned (like its own .maplibregl-marker); `relative` here would
+     fight that, depending on CSS load order, and the dot never lands on the point. */
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.locate-dot__pulse {
+  position: absolute;
+  inset: -11px;
+  border-radius: 9999px;
+  background: rgba(10, 132, 255, 0.28);
+  animation: locate-pulse 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+.locate-dot__core {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: #0a84ff;
+  box-shadow: 0 0 0 2px #fff, 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+@keyframes locate-pulse {
+  0% { transform: scale(0.5); opacity: 0.8; }
+  70% { transform: scale(1.9); opacity: 0; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
+/* Transit station marker on the map: same coloured-badge language as <LineBadge> */
+.map-badge {
+  /* see .locate-dot above: MapLibre needs this element itself absolutely positioned */
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 9999px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 0 2px #fff, 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
 /* Chinese / Japanese / Arabic: use the matching Noto font (loaded on demand) */
 :lang(zh-Hant) body { font-family: 'Noto Sans TC', var(--font-sans); }
 :lang(ja) body { font-family: 'Noto Sans JP', var(--font-sans); }

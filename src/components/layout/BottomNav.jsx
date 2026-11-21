@@ -10,7 +10,7 @@ export default function BottomNav() {
       aria-label={t('nav.main')}
       className="shrink-0 border-t border-line bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
     >
-      <ul className="grid grid-cols-3">
+      <ul className="grid auto-cols-fr grid-flow-col">
         {NAV_ITEMS.map(({ to, key, icon: Icon }) => (
           <li key={to}>
             <NavLink
@@ -23,7 +23,7 @@ export default function BottomNav() {
             >
               {({ isActive }) => (
                 <>
-                  <span className={`rounded-full px-4 py-1 transition ${isActive ? 'bg-primary/15' : ''}`}>
+                  <span className={`rounded-full px-2.5 py-1 transition ${isActive ? 'bg-primary/15' : ''}`}>
                     <Icon className="h-5 w-5" />
                   </span>
                   <span className="max-w-full truncate">{t(key)}</span>

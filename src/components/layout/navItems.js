@@ -1,8 +1,10 @@
-import { EvChargerIcon, EventsIcon, TrainIcon } from '../ui/Icons'
+import { EvChargerIcon, EventsIcon, MapPinIcon, SunIcon, TrainIcon } from '../ui/Icons'
 
 // Shared by the sidebar, the mobile bottom tab bar and the landing page buttons
 export const NAV_ITEMS = [
   { to: '/events', key: 'nav.events', icon: EventsIcon },
+  { to: '/places', key: 'nav.places', icon: MapPinIcon },
   { to: '/transit', key: 'nav.transit', icon: TrainIcon },
   { to: '/ev-charging', key: 'nav.ev', icon: EvChargerIcon },
+  { to: '/heat', key: 'nav.heat', icon: SunIcon },
 ]

@@ -58,6 +58,7 @@ export const mock = {
       lat: e.lat,
       lng: e.lng,
       type: pick(e.type, lang),
+      category: pick(e.type, lang),
       pricePerPerson: e.pricePerPerson, // € average per person, 0 = free
       currency: 'EUR',
       popularity: e.popularity, // 0–100 popularity rate
@@ -67,6 +68,12 @@ export const mock = {
 
   // GET /ev/stations?lang=
   // status: 'available' (at least 1 free) | 'busy' (all in use) | 'offline'
+  // GET /parking (no sample data: an empty list)
+  async getParking() {
+    await delay()
+    return []
+  },
+
   async getEvStations(lang = 'en') {
     await delay()
     return EV_STATIONS.map((st) => {
@@ -88,16 +95,16 @@ export const mock = {
     })
   },
 
-  // GET /ev/usage
-  // occupancy = % of chargers in use each hour today, typical = usual % for that hour
+  // GET /ev?history=1
+  // occupancy = % of charging points in use, one sample every 10 minutes over the last 24 hours
   async getEvUsage() {
     await delay()
     const curve = (h) => 15 + (h >= 8 && h <= 11 ? 35 : 0) + (h >= 17 && h <= 21 ? 45 : 0) + (h >= 12 && h <= 16 ? 20 : 0)
-    return Array.from({ length: 24 }, (_, h) => ({
-      hour: h,
-      occupancy: Math.min(100, curve(h) + rand(-10, 12)),
-      typical: Math.min(100, curve(h)),
-    }))
+    const now = Date.now() - (Date.now() % 600000)
+    return Array.from({ length: 144 }, (_, i) => {
+      const time = now - (143 - i) * 600000
+      return { time, occupancy: Math.min(100, curve(new Date(time).getHours()) + rand(-6, 6)) }
+    })
   },
 
   // GET /transit/lines   (public STASY / Hellenic Train timetables, see transitData.js)
