@@ -104,7 +104,7 @@ const mix = (a, b, t) =>
 
 export function DepthText({
   text = "Athens Pulse",
-  faceColor = "#1a719f",
+  faceColor = "#2ac2cc",
   depthColor = "#652ad0",
   layers = 14,
   reach = 26,
@@ -303,7 +303,7 @@ const STICKERS = [
   { art: "column", left: 88, top: 31, size: 110, rot: -6 },
   { art: "lycabettus", left: 4, top: 72, size: 150, rot: 6 },
   { art: "tram", left: 72, top: 74, size: 150, rot: -7 },
-  { art: "word", left: 21, top: 13, size: 140, rot: -4 },
+  { art: "word", left: 21, top: 6, size: 140, rot: -4 },
   { art: "wreath", left: 44, top: 1, size: 112, rot: 6 },
   { art: "helmet", left: 79, top: 52, size: 120, rot: -5 },
   { art: "meander", left: 14, top: 55, size: 100, rot: -10 },
@@ -355,11 +355,26 @@ export function StickerBomb() {
   );
 }
 
+/* ================= Parthenon behind the title ================= */
+function ParthenonBackdrop() {
+  return (
+    <svg className="backdrop" viewBox="0 14 100 76" aria-hidden="true">
+      <g fill="#f4efe6">
+        <polygon points="14,40 50,20 86,40" />
+        <rect x="16" y="42" width="68" height="5" />
+        {[0, 1, 2, 3, 4, 5].map((i) => <rect key={i} x={19 + i * 11.4} y="49" width="6" height="26" />)}
+        <rect x="14" y="76" width="72" height="4" />
+        <rect x="10" y="81" width="80" height="4" />
+      </g>
+    </svg>
+  );
+}
+
 /* ================= Home page ================= */
 const LINKS = [
-  { label: "Environment", href: "#" },
   { label: "Events", href: "#" },
-  { label: "Traffic", href: "#" },
+  { label: "Transit", href: "#" },
+  { label: "EV Charging", href: "#" },
 ];
 
 export default function Home() {
@@ -369,7 +384,10 @@ export default function Home() {
       <GradientWaves />
       <StickerBomb />
       <main className="home">
-        <DepthText text="Athens Pulse" faceColor="#1a719f" depthColor="#652ad0" />
+        <div className="hero">
+          <ParthenonBackdrop />
+          <DepthText text="Athens Pulse" faceColor="#2ac2cc" depthColor="#652ad0" />
+        </div>
         <p className="tag">Athens, live: what the city is doing right now.</p>
         <nav aria-label="Project links" className="links">
           {LINKS.map((l) => (
@@ -389,6 +407,13 @@ html, body, #root { height: 100%; margin: 0; background: #120f17; }
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 2rem; padding: 2rem 1.25rem; text-align: center;
   font-family: "Instrument Sans", system-ui, sans-serif; color: #f1ecfa;
+}
+.hero { position: relative; width: fit-content; }
+.backdrop {
+  position: absolute; left: 50%; top: 50%; z-index: -1; pointer-events: none;
+  width: clamp(260px, 48vw, 640px); height: auto; opacity: .3;
+  transform: translate(-50%, -78%);
+  filter: drop-shadow(0 0 18px rgba(143, 211, 224, .35));
 }
 .depth-text {
   margin: 0 auto; position: relative; width: fit-content;
