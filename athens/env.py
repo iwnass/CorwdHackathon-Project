@@ -1,4 +1,4 @@
-"""Air quality and heat from the Smart Sense stations.
+"""Heat (temperature, humidity, feels-like) from the Smart Sense stations.
 
 Source: dataset env-all-stations — one row per station per hour, all stations, timestamps in UTC.
 One request returns the last ~24 h for the whole city; station coordinates come from the
@@ -12,7 +12,7 @@ from statistics import mean
 
 from . import cache, ckan
 from .geo import distance_to_boundary_m, haversine, in_polygon
-from .indices import eaqi_label, heat_index, heat_level, pollution, pollution_level, us_aqi, us_aqi_category
+from .indices import heat_index, heat_level
 from .times import iso_local, iso_utc, now_utc, parse_utc
 
 ALL_STATIONS = "env-all-stations"
@@ -20,10 +20,6 @@ TTL_S = int(os.environ.get("ATHENS_ENV_TTL_S", 600))  # the data is hourly
 ROWS = int(os.environ.get("ATHENS_ENV_ROWS", 4000))   # newest rows; ≈ 24 h × ~100 stations
 WINDOW_H = 24
 FRESH_H = 3  # a station counts toward the city's "now" only if its last reading is this recent
-POLLUTANTS = ("pm1", "pm2_5", "pm10", "no2", "o3", "co", "so2", "no")
-# Above the top of the EPA scale: a faulty sensor (seen live: one station stuck at ~1900 µg/m³).
-# Such rows stay visible with suspect=True but are left out of city averages and rankings.
-SUSPECT = {"pm2_5": 500, "pm10": 604}
 
 
 def _optional(future, default):
@@ -93,23 +89,19 @@ def _window(rows):
             continue
         if t > future:  # a sensor with a wrong clock must not drag the window away from everyone else
             continue
-        r = {**r, "station_id": sid, "aqi": ckan.as_int(r.get("aqi")),
+        r = {**r, "station_id": sid,
              "district_id": ckan.as_int(r.get("municipal_district_id")),
-             **{k: ckan.num(r.get(k)) for k in (*POLLUTANTS, "temperature", "humidity", "pressure")}}
+             **{k: ckan.num(r.get(k)) for k in ("temperature", "humidity", "pressure")}}
         key = (sid, t.replace(minute=0, second=0, microsecond=0))
         if key not in by_hour or t > by_hour[key][0]:
             by_hour[key] = (t, r)
     if not by_hour:
         return []
     last = max(h for _, h in by_hour)
-    out = [{**r, "_t": h, "suspect": _suspect(r)} for (_, h), (_, r) in by_hour.items()
+    out = [{**r, "_t": h} for (_, h), (_, r) in by_hour.items()
            if h > last - timedelta(hours=WINDOW_H)]
     out.sort(key=lambda r: r["_t"])
     return out
-
-
-def _suspect(r):
-    return any(isinstance(r.get(k), (int, float)) and r[k] > limit for k, limit in SUSPECT.items())
 
 
 def _avg(values, nd=1):
@@ -151,84 +143,21 @@ def stations(d):
     return sorted((_info(r, d["locations"]) for r in _latest(d["rows"]).values()), key=lambda s: s["station_id"])
 
 
-# ---------- Air ----------
-def _air_row(r):
-    """Headline: one general pollution percentage. Every individual pollutant goes into `details`
-    (for the frontend's analytic view). A faulty sensor gets no percentage instead of a false 100 %."""
-    pct, level, main = (None, None, None) if r["suspect"] else pollution(r)
-    u = us_aqi(r.get("pm2_5"), r.get("pm10"))
-    return {"pollution_pct": pct, "pollution_level": level, "main_pollutant": main, "suspect": r["suspect"],
-            "details": {"aqi": r.get("aqi"), "aqi_label": eaqi_label(r.get("aqi")),
-                        "us_aqi": u, "us_aqi_category": us_aqi_category(u), **{k: r.get(k) for k in POLLUTANTS}}}
-
-
-def _air_stations(d, rows):
-    """Latest reading per station, most polluted first (faulty sensors last)."""
-    now, last = now_utc(), d["rows"][-1]["_t"]
-    st = [{**_info(r, d["locations"]), **_time(r["_t"]), "age_hours": _age_h(r["_t"], now),
-           "fresh": _age_h(r["_t"], last) <= FRESH_H, **_air_row(r)} for r in _latest(rows).values()]
-    st.sort(key=lambda s: (s["suspect"], s["pollution_pct"] is None, -(s["pollution_pct"] or 0)))
-    return st
-
-
-def _air_summary(st):
-    """Over fresh, non-suspect stations: the average and worst percentage up front, the rest in details."""
-    fresh = [s for s in st if s["fresh"] and not s["suspect"]]
-    pct = _avg((s["pollution_pct"] for s in fresh), 0)
-    pct = None if pct is None else int(pct)
-    us = _avg((s["details"]["us_aqi"] for s in fresh), 0)
-    return {"stations": len(fresh), "pollution_pct_avg": pct, "pollution_level": pollution_level(pct),
-            "pollution_pct_max": max((s["pollution_pct"] for s in fresh if s["pollution_pct"] is not None), default=None),
-            "worst": [s["station_id"] for s in fresh[:5]],
-            "suspect": [s["station_id"] for s in st if s["suspect"]],
-            "details": {"aqi_avg": _avg(s["details"]["aqi"] for s in fresh),
-                        "aqi_max": max((s["details"]["aqi"] for s in fresh if s["details"]["aqi"] is not None), default=None),
-                        "us_aqi_avg": None if us is None else int(us), "us_aqi_category": us_aqi_category(us),
-                        **{f"{k}_avg": _avg(s["details"][k] for s in fresh) for k in ("pm2_5", "pm10", "no2", "o3", "so2")}}}
-
-
-def _air_hourly(rows):
-    hourly = []
-    for t, rs in _by_hour(r for r in rows if not r["suspect"]):
-        pct = _avg((pollution(r)[0] for r in rs), 0)
-        u = _avg((us_aqi(r.get("pm2_5"), r.get("pm10")) for r in rs), 0)
-        hourly.append({**_time(t), "stations": len(rs), "pollution_pct_avg": None if pct is None else int(pct),
-                       "details": {"aqi_avg": _avg(r.get("aqi") for r in rs), "us_aqi_avg": None if u is None else int(u),
-                                   **{f"{k}_avg": _avg(r.get(k) for r in rs) for k in ("pm2_5", "pm10", "no2", "o3", "so2")}}})
-    return hourly
-
-
-def air(d):
-    rows = d["rows"]
-    if not rows:
-        return {"stations": [], "city": None, "hourly": []}
-    st = _air_stations(d, rows)
-    return {"city": {**_time(rows[-1]["_t"]), **_air_summary(st)}, "stations": st, "hourly": _air_hourly(rows)}
-
-
 # ---------- Zones = municipal districts ----------
 def _zone(d, district_id, rows, detail):
-    """One district: {…identity, air: {summary, hourly}, heat: {summary, hourly}, [stations]}."""
+    """One district: {…identity, heat: {summary, hourly}, [stations]}."""
     info = d["districts"].get(district_id) or {}
     z = {"district_id": district_id, "name": info.get("name"), "lat": info.get("lat"), "lon": info.get("lon"),
          "neighbourhoods": info.get("neighbourhoods", []), "stations_count": len({r["station_id"] for r in rows}),
-         "air": None, "heat": None}
+         "heat": None}
     if rows:
-        air_st, heat_st, heat_h = _air_stations(d, rows), _heat_stations(d, rows), _heat_hourly(rows)
-        z["air"] = {**_air_summary(air_st), "hourly": _air_hourly(rows)}
+        heat_st, heat_h = _heat_stations(d, rows), _heat_hourly(rows)
         z["heat"] = {**_heat_summary(heat_st, heat_h), "hourly": heat_h}
         if detail:
-            z["stations"] = _combined(air_st, heat_st)
+            z["stations"] = heat_st
     elif detail:
         z["stations"] = []
     return z
-
-
-def _combined(air_st, heat_st):
-    """One row per station with both its air and its heat fields (air order kept)."""
-    heat_by = {s["station_id"]: s for s in heat_st}
-    keys = ("temperature", "humidity", "feels_like", "heat_level", "min_24h", "max_24h")
-    return [{**s, **{k: heat_by[s["station_id"]][k] for k in keys}} for s in air_st]
 
 
 def _ranked(zs, block, field):
@@ -238,16 +167,16 @@ def _ranked(zs, block, field):
 
 
 def zones(d):
-    """Air quality and heat per municipal district (1–7), worst air first."""
+    """Heat per municipal district (1–7), hottest first."""
     rows = d["rows"]
     by = defaultdict(list)
     for r in rows:
         by[r["district_id"]].append(r)
     out = [_zone(d, i, by.get(i, []), False) for i in d["districts"]]
-    order = _ranked(out, "air", "pollution_pct_avg")
+    order = _ranked(out, "heat", "temperature_avg")
     out.sort(key=lambda z: order.index(z["district_id"]))
     return {**(_time(rows[-1]["_t"]) if rows else {}),
-            "ranking": {"worst_air": order, "hottest": _ranked(out, "heat", "temperature_avg")},
+            "ranking": {"hottest": order},
             "zones": out,
             "unassigned_stations": sorted({r["station_id"] for r in rows if r["district_id"] not in d["districts"]})}
 
@@ -343,20 +272,19 @@ def locate(d, lat, lon):
 
 
 def nearest(d, lat, lon, k):
-    """The k closest stations with a recent, trustworthy reading, air + heat, with distance_m.
-    Faulty (suspect) sensors are skipped: on a map they would show the user a false "Hazardous"."""
+    """The k closest stations with a recent reading, with distance_m."""
     return [s for _, s in _by_distance(d, lat, lon)[:k]]
 
 
 def _by_distance(d, lat, lon):
-    """[(exact distance, station)] for every trustworthy station, nearest first; ties broken by id so that
+    """[(exact distance, station)] for every station with a recent reading, nearest first; ties broken by id so that
     co-located stations always come out in the same order."""
     rows = d["rows"]
     if not rows:
         return []
     out = []
-    for s in _combined(_air_stations(d, rows), _heat_stations(d, rows)):
-        if s["lat"] is not None and s["fresh"] and not s["suspect"]:
+    for s in _heat_stations(d, rows):
+        if s["lat"] is not None and s["fresh"]:
             dist = haversine(lat, lon, s["lat"], s["lon"])
             out.append((dist, {**s, "distance_m": round(dist)}))
     out.sort(key=lambda x: (x[0], x[1]["station_id"]))
@@ -364,8 +292,7 @@ def _by_distance(d, lat, lon):
 
 
 RECHECK_MIN_M, RECHECK_MAX_M = 1, 500  # below ~GPS accuracy (5–10 m) the user is at a border: call on every fix
-TRACK_FIELDS = ("station_id", "name", "lat", "lon", "distance_m", "pollution_pct", "pollution_level", "main_pollutant",
-                "temperature", "feels_like", "heat_level", "time")
+TRACK_FIELDS = ("station_id", "name", "lat", "lon", "distance_m", "temperature", "humidity", "feels_like", "heat_level", "time")
 
 
 def track(d, lat, lon, k):
@@ -392,19 +319,19 @@ def track(d, lat, lon, k):
 
 
 def here(d, lat, lon, k):
-    """Everything the map needs for one position: zone (air + heat, 24 h curves), nearest stations, city context."""
+    """Everything the map needs for one position: zone (heat, 24 h curves), nearest stations, city context."""
     loc = locate(d, lat, lon)
     z = zone(d, loc["district_id"]) if loc["district_id"] is not None else None
-    city_air, city_heat = air(d)["city"], heat(d)["city"]
+    city_heat = heat(d)["city"]
     return {"location": loc, "zone": z and z["zone"], "nearest_stations": nearest(d, lat, lon, k),
-            "city": {"air": city_air, "heat": city_heat}}
+            "city": {"heat": city_heat}}
 
 
 # ---------- One station ----------
 def station(d, station_id):
-    """Hourly air + heat for one station over the last 24 h, or None if unknown."""
+    """Hourly heat for one station over the last 24 h, or None if unknown."""
     rows = [r for r in d["rows"] if r["station_id"] == station_id]
     if not rows:
         return None
     return {"station": _info(rows[-1], d["locations"]),
-            "hourly": [{**_time(r["_t"]), **_air_row(r), **_heat_row(r), "pressure": r.get("pressure")} for r in rows]}
+            "hourly": [{**_time(r["_t"]), **_heat_row(r), "pressure": r.get("pressure")} for r in rows]}

@@ -1,4 +1,4 @@
-# GET /api/i18n?lang=de → labels for every code the API returns (place kinds, crowd/air/heat levels, event
+# GET /api/i18n?lang=de → labels for every code the API returns (place kinds, crowd/heat levels, event
 #   categories…) in one of 9 languages: en el de fr es ru zh ja ar. `dir` is "rtl" for Arabic.
 import os
 import sys

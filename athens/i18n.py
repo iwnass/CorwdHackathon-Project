@@ -1,5 +1,5 @@
 """Labels for the codes the API returns, in 9 languages. The API itself always returns stable codes
-("busy", "museum", "Moderate"…); the app looks them up here once (GET /api/i18n?lang=…).
+("busy", "museum", "caution"…); the app looks them up here once (GET /api/i18n?lang=…).
 
 shortcut: written by hand, not by native speakers — have each language reviewed before a public launch.
 """
@@ -24,17 +24,20 @@ _TABLE = {
     "fountain": "Drinking fountain|Βρύση πόσιμου νερού|Trinkbrunnen|Fontaine d'eau potable|Fuente de agua potable|Питьевой фонтанчик|饮水点|水飲み場|نافورة مياه شرب",
     "pocket_park": "Pocket park|Πάρκο τσέπης|Kleiner Park|Mini-parc|Parque de bolsillo|Мини-парк|口袋公园|ポケットパーク|حديقة صغيرة",
     "pool": "Swimming pool|Κολυμβητήριο|Schwimmbad|Piscine|Piscina|Бассейн|游泳池|プール|مسبح",
+    "ev_charger": "EV charger|Φορτιστής ηλεκτρικών οχημάτων|E-Ladestation|Borne de recharge|Punto de recarga|Зарядная станция|电动车充电桩|EV充電スタンド|شاحن سيارات كهربائية",
+    "ev_available": "Available|Διαθέσιμος|Frei|Disponible|Disponible|Свободна|可用|空きあり|متاح",
+    "ev_in_use": "In use|Σε χρήση|Belegt|Occupée|En uso|Занята|使用中|使用中|قيد الاستخدام",
+    "ev_out_of_order": "Out of order|Εκτός λειτουργίας|Außer Betrieb|Hors service|Fuera de servicio|Не работает|故障|故障中|معطل",
+    "ev_unknown": "Status unknown|Άγνωστη κατάσταση|Status unbekannt|Statut inconnu|Estado desconocido|Статус неизвестен|状态未知|状態不明|الحالة غير معروفة",
+    "step_free": "Step-free access|Πρόσβαση χωρίς σκαλοπάτια|Stufenloser Zugang|Accès de plain-pied|Acceso sin escalones|Безбарьерный доступ|无障碍通道|段差なし|دخول بدون درج",
     # crowds (WiFi footfall)
     "quiet": "Quiet|Ήσυχα|Ruhig|Calme|Tranquilo|Спокойно|人少|空いている|هادئ",
     "usual": "As usual|Όπως συνήθως|Wie üblich|Comme d'habitude|Como de costumbre|Как обычно|正常|通常どおり|كالمعتاد",
     "busy": "Busy|Πολύς κόσμος|Belebt|Animé|Concurrido|Многолюдно|人多|混雑|مزدحم",
-    # air (European AQI bands)
-    "Good": "Good|Καλή|Gut|Bonne|Buena|Хорошее|好|良い|جيدة",
-    "Fair": "Fair|Ικανοποιητική|Akzeptabel|Moyenne|Razonablemente buena|Удовлетворительное|尚可|まずまず|مقبولة",
-    "Moderate": "Moderate|Μέτρια|Mäßig|Dégradée|Regular|Умеренное|中等|普通|متوسطة",
-    "Poor": "Poor|Κακή|Schlecht|Mauvaise|Desfavorable|Плохое|差|悪い|سيئة",
-    "Very poor": "Very poor|Πολύ κακή|Sehr schlecht|Très mauvaise|Muy desfavorable|Очень плохое|很差|非常に悪い|سيئة جدًا",
-    "Extremely poor": "Extremely poor|Εξαιρετικά κακή|Extrem schlecht|Extrêmement mauvaise|Extremadamente desfavorable|Крайне плохое|极差|極めて悪い|سيئة للغاية",
+    # live crowds (the app's own users)
+    "crowd_low": "Few people|Λίγος κόσμος|Wenig los|Peu de monde|Poca gente|Мало людей|人少|人が少ない|عدد قليل من الناس",
+    "crowd_medium": "Some people|Αρκετός κόσμος|Mäßig besucht|Assez de monde|Algo de gente|Довольно людно|人较多|やや混雑|عدد متوسط من الناس",
+    "crowd_high": "Crowded|Συνωστισμός|Sehr voll|Bondé|Muy concurrido|Очень людно|拥挤|大変混雑|مزدحم جدًا",
     # heat (NWS heat-index levels)
     "none": "Normal|Κανονική|Normal|Normale|Normal|Нормально|正常|通常|طبيعي",
     "caution": "Caution|Προσοχή|Vorsicht|Prudence|Precaución|Осторожно|注意|注意|حذر",

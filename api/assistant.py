@@ -1,5 +1,5 @@
 # POST /api/assistant  {"text": "...", "conversation_id"?: "...", "lat"?: 37.98, "lon"?: 23.73, "engine"?: "llm"}
-#   → the City of Athens assistant (AthensGov Sandbox) for city services; air/heat/cooling questions answered from
+#   → the City of Athens assistant (AthensGov Sandbox) for city services; heat/cooling questions answered from
 #     our own data. Send back the returned conversation_id with the next message to keep the dialogue going.
 #   503 if ATHENSGOV_SANDBOX_KEY is not set, 429 when the shared key's per-minute limit is reached.
 import os
@@ -13,7 +13,7 @@ from athens.http import HttpError, float_param, make_handler  # noqa: E402
 CONV_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")  # it goes into the city API's URL path
 
 
-def get(q, body):
+def get(q, body, ip=None):
     text = body.get("text")
     if not isinstance(text, str) or not text.strip():
         raise HttpError(400, "text is required")

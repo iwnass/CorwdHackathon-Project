@@ -1,4 +1,4 @@
-# GET /api/zones                → air quality per municipal district (7 zones), worst first, with 24 h curves
+# GET /api/zones                → heat and footfall per municipal district (7 zones), hottest first, with 24 h curves
 # GET /api/zones?district_id=6  → one zone with its stations
 import os
 import sys
@@ -9,7 +9,7 @@ from athens.http import HttpError, int_param, make_handler, with_meta  # noqa: E
 
 
 def _footfall():
-    try:  # WiFi footfall per district is extra; air and heat still answer
+    try:  # WiFi footfall per district is extra; heat still answers
         return traffic.by_district(traffic.data()[0])
     except Exception:
         return {}

@@ -4,12 +4,14 @@ shortcut: plain http — gis.cityofathens.gr only offers outdated TLS (https fai
 """
 import json
 import os
+import sys
 from concurrent.futures import ThreadPoolExecutor
 
 from . import cache, ckan
 from .geo import haversine
 
 WFS = os.environ.get("ATHENS_GIS_WFS", "http://gis.cityofathens.gr/geoserver/ows")
+GIS_TIMEOUT = 8  # when the city GIS is down, fall back to the snapshot quickly (a request must finish in 30 s)
 TTL_S = 24 * 3600  # these layers change a few times a year
 LAYERS = {  # kind → (layer, name field, address field)
     "fountain": ("geonode:pidakes", "name", "address"),
@@ -18,9 +20,21 @@ LAYERS = {  # kind → (layer, name field, address field)
 }
 
 
+SNAPSHOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "gis")
+
+
 def layer(name, get):
+    """Live from the city GIS; if it is down (seen: every layer timing out), the snapshot in data/gis/."""
     q = f"service=WFS&version=1.0.0&request=GetFeature&typename={name}&outputFormat=application/json&srsName=EPSG:4326"
-    return json.loads(get(f"{WFS}?{q}").decode("utf-8")).get("features", [])
+    try:
+        return json.loads(get(f"{WFS}?{q}").decode("utf-8")).get("features", [])
+    except Exception as e:
+        path = os.path.join(SNAPSHOT, name.split(":")[-1] + ".json")
+        if not os.path.exists(path):
+            raise
+        print(f"city GIS {name}: {type(e).__name__}, using snapshot", file=sys.stderr)
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)["features"]
 
 
 def layers(names, get):
@@ -29,7 +43,11 @@ def layers(names, get):
         return dict(zip(names, ex.map(lambda n: layer(n, get), names)))
 
 
-def load(get=ckan.http_get):
+def gis_get(url):
+    return ckan.http_get(url, timeout=GIS_TIMEOUT)
+
+
+def load(get=gis_get):
     out = []
     got = layers([name for name, _, _ in LAYERS.values()], get)
     for kind, (layer_name, name_f, addr_f) in LAYERS.items():

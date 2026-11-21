@@ -1,6 +1,6 @@
 """Chat assistant: the City of Athens AthensGov Sandbox bot, plus answers from our own data.
 
-Air quality, heat and "where can I cool down" questions are answered here (the city bot does not have that data);
+Heat and "where can I cool down" questions are answered here (the city bot does not have that data);
 everything else goes to the city bot (services, appointments, reports, fines…), which keeps the conversation and its
 state on its side (conversation_id). Needs ATHENSGOV_SANDBOX_KEY. Its limits: 100 requests/min per key, 2000 chars
 per message, "engine": "llm" 20/min and 1000 messages/day.
@@ -86,10 +86,7 @@ def _fold(s):
 TOPICS = [  # first match wins: "it's hot, where can I cool down?" is a cooling question
     ("cooling", ("δροσ", "βρυσ", "πιδακ", "κολυμβητ", "πισιν", "fountain", "cool down", "pool", "drosi", "vrysi", "pidak")),
     ("heat", ("ζεστ", "θερμοκρασ", "καυσων", "heat", "hot", "temperature", "zest", "kafson", "kaysw", "thermokras")),
-    ("air", ("αερα", "ατμοσφαιρ", "ρυπαν", "μολυνσ", "aqi", "air quality", "pollution", "aeras", "rypans", "atmosfair")),
 ]
-AIR_EL = {"Good": "Καλή", "Fair": "Ικανοποιητική", "Moderate": "Μέτρια", "Poor": "Κακή", "Very poor": "Πολύ κακή",
-          "Extremely poor": "Εξαιρετικά κακή"}
 HEAT_EL = {"none": "κανονική", "caution": "προσοχή", "extreme_caution": "αυξημένη προσοχή", "danger": "κίνδυνος",
            "extreme_danger": "μεγάλος κίνδυνος"}
 KIND_EL = {"fountain": "Βρύση", "pocket_park": "Πάρκο τσέπης", "pool": "Κολυμβητήριο"}
@@ -122,15 +119,6 @@ def local_answer(name, lat, lon, greek):
     if s is None:
         return _reply(name, "Δεν υπάρχουν πρόσφατες μετρήσεις." if greek else "No recent readings.")
     card = {"type": "station", "title": s["name"], "data": {"lat": s["lat"], "lng": s["lon"], "station_id": s["station_id"]}}
-    zone = h["zone"] or {}
-    if name == "air":
-        lvl = s["pollution_level"]
-        text = (f"Αέρας στο **{s['name']}** ({s['distance_m']} m): **{s['pollution_pct']}%**, {AIR_EL.get(lvl, lvl)}."
-                if greek else f"Air at **{s['name']}** ({s['distance_m']} m): **{s['pollution_pct']}%**, {lvl}.")
-        za = zone.get("air") or {}
-        if za.get("pollution_pct_avg") is not None:
-            text += (f" Στη ζώνη σου: {za['pollution_pct_avg']}%." if greek else f" Your zone: {za['pollution_pct_avg']}%.")
-        return _reply(name, text, [card])
     lvl = s["heat_level"]
     text = (f"Θερμοκρασία στο **{s['name']}** ({s['distance_m']} m): **{s['temperature']} °C**, αίσθηση {s['feels_like']} °C"
             f" ({HEAT_EL.get(lvl, lvl)})." if greek else

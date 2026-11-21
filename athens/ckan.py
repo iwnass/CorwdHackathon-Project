@@ -16,10 +16,10 @@ class CkanError(Exception):
     pass
 
 
-def http_get(url):
+def http_get(url, timeout=None):
     """The only function that touches the network; tests replace it."""
     req = urllib.request.Request(url, headers={"User-Agent": "athens-monitor/1.0", "Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+    with urllib.request.urlopen(req, timeout=timeout or TIMEOUT) as r:
         data = r.read(MAX_BYTES + 1)
     if len(data) > MAX_BYTES:
         raise CkanError("response larger than 20 MB")

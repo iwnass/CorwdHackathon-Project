@@ -102,6 +102,12 @@ def read_json(handler):
     return body
 
 
+def client_ip(handler):
+    """The caller's IP. On Vercel the platform sets X-Forwarded-For (first entry = the client)."""
+    fwd = (handler.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+    return fwd or handler.client_address[0]
+
+
 def preflight(handler):
     """CORS preflight: browsers send it before a cross-origin JSON POST."""
     handler.send_response(204)
@@ -113,13 +119,13 @@ def preflight(handler):
 
 
 def make_handler(route, fn, cache=CACHE_CONTROL, method="GET"):
-    """GET: fn(query). POST: fn(query, json_body)."""
+    """GET: fn(query). POST: fn(query, json_body, client_ip)."""
     ROUTES[route] = (fn, cache, method)
 
     class handler(BaseHTTPRequestHandler):
         if method == "POST":
             def do_POST(self):
-                respond(self, *run(lambda q: fn(q, read_json(self)), self.path), cache)
+                respond(self, *run(lambda q: fn(q, read_json(self), client_ip(self)), self.path), cache)
 
             def do_OPTIONS(self):
                 preflight(self)

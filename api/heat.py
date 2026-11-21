@@ -1,5 +1,5 @@
 # GET /api/heat                 → city temperature now, hottest/coolest, peak hour, hourly curve (24 h)
-# GET /api/heat?station_id=102  → one station, hourly air + heat (24 h)
+# GET /api/heat?station_id=102  → one station, hourly heat (24 h)
 import os
 import sys
 

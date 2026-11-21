@@ -12,7 +12,7 @@ sys.path.insert(0, ROOT)
 from athens import cache, ckan, env, events, traffic  # noqa: E402
 from athens.geo import distance_to_boundary_m, haversine, in_polygon, parse_wkt_polygon  # noqa: E402
 from athens.http import ROUTES, HttpError, float_param, int_param, run  # noqa: E402
-from athens.indices import eaqi_label, heat_index, heat_level, pollution, pollution_level, us_aqi, us_aqi_category  # noqa: E402
+from athens.indices import heat_index, heat_level  # noqa: E402
 
 
 def fake_ckan(packages=(), datastore=None, show=None):
@@ -66,31 +66,6 @@ def env_row(sid, ts, **kw):
 
 
 class Indices(unittest.TestCase):
-    def test_us_aqi_breakpoints(self):
-        self.assertEqual(us_aqi(9.0, None), 50)
-        self.assertEqual(us_aqi(35.4, None), 100)
-        self.assertEqual(us_aqi(35.49, None), 100)  # truncated to 35.4, not rounded to 35.5
-        self.assertEqual(us_aqi(None, 154), 100)
-        self.assertEqual(us_aqi(15.0, 200), 123)    # the worse pollutant wins
-        self.assertEqual(us_aqi(1000, None), 500)
-        self.assertIsNone(us_aqi(None, None))
-
-    def test_pollution_pct(self):
-        self.assertEqual(pollution({"pm2_5": 10}), (17, "Good", "pm2_5"))      # top of band 1 is still Good
-        self.assertEqual(pollution({"pm2_5": 15}), (25, "Fair", "pm2_5"))      # middle of band 2
-        self.assertEqual(pollution({"pm2_5": 10, "no2": 100})[::2], (39, "no2"))  # the worst pollutant decides
-        self.assertEqual(pollution({"pm2_5": 10, "no2": 100})[1], "Moderate")
-        self.assertEqual(pollution({"pm10": 5000}), (100, "Extremely poor", "pm10"))
-        self.assertEqual(pollution({"pm2_5": "x", "co": 300}), (None, None, None))  # CO has no EAQI band
-        self.assertEqual([pollution_level(p) for p in (0, 16, 17, 50, 51, 100)],
-                         ["Good", "Good", "Fair", "Moderate", "Poor", "Extremely poor"])
-
-    def test_categories(self):
-        self.assertEqual(us_aqi_category(50), "Good")
-        self.assertEqual(us_aqi_category(101), "Unhealthy for sensitive groups")
-        self.assertEqual(eaqi_label(2), "Fair")
-        self.assertIsNone(eaqi_label(None))
-
     def test_heat_index(self):
         self.assertEqual(heat_index(20.0, 50.0), 20.0)       # mild: feels like the air
         self.assertAlmostEqual(heat_index(32.2, 70), 41.1, delta=0.5)  # NWS table: 90 °F, 70 % → 106 °F
@@ -219,52 +194,34 @@ class Env(unittest.TestCase):
         self.assertEqual(h["city"]["peak_hour_24h"]["time_local"], "2026-11-21T11:00+02:00")
         self.assertEqual([x["time"] for x in h["hourly"]], ["2026-11-21T08:00:00Z", "2026-11-21T09:00:00Z"])
 
-    def test_faulty_sensor_is_flagged_not_averaged(self):
-        rows = [env_row(1, "2026-11-21T09:00:00", pm2_5=10.0, pm10=20.0),
-                env_row(2, "2026-11-21T09:00:00", pm2_5=1800.0, pm10=1900.0, aqi=6)]
-        a = env.air(self.build(rows))
-        self.assertEqual(a["city"]["details"]["pm2_5_avg"], 10.0)
-        self.assertEqual((a["city"]["pollution_pct_avg"], a["city"]["pollution_pct_max"]), (17, 17))
-        self.assertIsNone(a["stations"][-1]["pollution_pct"])  # faulty: no false 100 %
-        self.assertEqual(a["stations"][-1]["details"]["pm2_5"], 1800.0)  # raw value still there for the analytic view
-        self.assertEqual(a["city"]["suspect"], [2])
-        self.assertEqual(a["city"]["worst"], [1])
-        self.assertTrue(a["stations"][-1]["suspect"])
-        self.assertEqual((a["hourly"][0]["pollution_pct_avg"], a["hourly"][0]["details"]["pm2_5_avg"]), (17, 10.0))
-
     def test_string_numbers_and_bad_clock(self):
-        rows = [env_row("1", "2026-11-21T09:00:00", pm2_5="12.5", temperature="21.5", humidity="40", aqi="2"),
+        rows = [env_row("1", "2026-11-21T09:00:00", temperature="21.5", humidity="40"),
                 env_row(2, "2026-11-21T09:00:00", temperature="n/a"),
                 env_row(7, "2099-01-01T00:00:00")]  # wrong clock: ignored, does not move the window
         d = self.build(rows)
         self.assertEqual(sorted(r["station_id"] for r in d["rows"]), [1, 2])
-        a, h = env.air(d), env.heat(d)
-        s1 = next(s for s in a["stations"] if s["station_id"] == 1)
-        self.assertEqual((s1["details"]["pm2_5"], s1["details"]["aqi_label"], s1["lat"]), (12.5, "Fair", 38.0))
-        self.assertEqual((s1["pollution_pct"], s1["pollution_level"]), (21, "Fair"))
-        self.assertNotIn("pm2_5", s1)  # chemicals only inside details
-        self.assertEqual(h["stations"][0]["temperature"], 21.5)
+        h = env.heat(d)
+        self.assertEqual((h["stations"][0]["temperature"], h["stations"][0]["humidity"], h["stations"][0]["lat"]), (21.5, 40.0, 38.0))
         self.assertIsNone(h["stations"][1]["temperature"])
 
     def test_zones_are_municipal_districts(self):
-        rows = [env_row(1, "2026-11-21T09:00:00", pm2_5=40.0, temperature=20.0, municipal_district_id=6),
-                env_row(2, "2026-11-21T09:00:00", pm2_5=5.0, temperature=22.0, municipal_district_id=6),
-                env_row(3, "2026-11-21T09:00:00", pm2_5=60.0, temperature=18.0, municipal_district_id="4"),
-                env_row(4, "2026-11-21T09:00:00", pm2_5=900.0, temperature=19.0, municipal_district_id=4),  # faulty PM
+        rows = [env_row(1, "2026-11-21T09:00:00", temperature=20.0, municipal_district_id=6),
+                env_row(2, "2026-11-21T09:00:00", temperature=22.0, municipal_district_id=6),
+                env_row(3, "2026-11-21T09:00:00", temperature=18.0, municipal_district_id="4"),
+                env_row(4, "2026-11-21T09:00:00", temperature=19.0, municipal_district_id=4),
                 env_row(9, "2026-11-21T09:00:00", hood="ΚΟΥΚΑΚΙ", temperature=17.0, municipal_district_id=None)]
         d = self.build(rows)
         z = env.zones(d)
         self.assertEqual(len(z["zones"]), 7)                                    # every district is a zone
-        self.assertEqual(z["ranking"]["worst_air"][:2], [4, 6])
         self.assertEqual(z["ranking"]["hottest"][:2], [6, 4])
-        z4, z6 = z["zones"][0], z["zones"][1]
+        z6, z4 = z["zones"][0], z["zones"][1]                                   # hottest first
         self.assertEqual((z4["name"], z4["stations_count"]), ("4ο Δημοτικό Διαμέρισμα Αθήνας", 3))
-        self.assertEqual((z4["air"]["stations"], z4["air"]["suspect"], z4["air"]["details"]["pm2_5_avg"]), (2, [4], 35.0))
-        self.assertEqual((z4["heat"]["stations"], z4["heat"]["temperature_avg"]), (3, 18.0))  # PM fault ≠ bad thermometer
-        self.assertEqual((z6["air"]["details"]["pm2_5_avg"], z6["heat"]["temperature_avg"], z6["heat"]["hottest"]), (22.5, 21.0, [2, 1]))
+        self.assertEqual((z4["heat"]["stations"], z4["heat"]["temperature_avg"]), (3, 18.0))  # station 9 via its neighbourhood
+        self.assertEqual((z6["heat"]["temperature_avg"], z6["heat"]["hottest"]), (21.0, [2, 1]))
+        self.assertNotIn("air", z6)
         self.assertEqual(len(z6["heat"]["hourly"]), 1)
         self.assertEqual((z6["lat"], z6["neighbourhoods"]), (38.005, ["ΑΓΙΟΣ ΝΙΚΟΛΑΟΣ", "Κυψέλη"]))
-        self.assertEqual((z["zones"][-1]["stations_count"], z["zones"][-1]["air"]), (0, None))
+        self.assertEqual((z["zones"][-1]["stations_count"], z["zones"][-1]["heat"]), (0, None))
         one = env.zone(d, 6)["zone"]
         self.assertEqual([(s["station_id"], s["temperature"]) for s in sorted(one["stations"], key=lambda s: s["station_id"])],
                          [(1, 20.0), (2, 22.0)])
@@ -272,8 +229,7 @@ class Env(unittest.TestCase):
 
     def test_here(self):
         d = self.build([env_row(1, "2026-11-21T09:00:00", municipal_district_id=6),
-                        env_row(2, "2026-11-21T09:00:00", municipal_district_id=6, pm2_5=30.0),
-                        env_row(5, "2026-11-21T09:00:00", municipal_district_id=6, pm2_5=1800.0),  # faulty: never "nearest"
+                        env_row(2, "2026-11-21T09:00:00", municipal_district_id=6),
                         env_row(3, "2026-11-21T09:00:00", municipal_district_id=4, hood="ΚΟΥΚΑΚΙ")])
         inside = env.locate(d, 38.001, 23.741)
         self.assertEqual((inside["match"], inside["neighbourhood"], inside["district_id"]), ("inside", "Κυψέλη", 6))
@@ -283,7 +239,7 @@ class Env(unittest.TestCase):
 
         h = env.here(d, 38.001, 23.741, 2)
         self.assertEqual(h["zone"]["district_id"], 6)
-        self.assertEqual((h["zone"]["air"]["stations"], h["zone"]["air"]["suspect"]), (2, [5]))
+        self.assertEqual((h["zone"]["heat"]["stations"], list(h["city"])), (2, ["heat"]))
         self.assertIsNotNone(h["zone"]["heat"]["temperature_avg"])
         self.assertEqual([s["station_id"] for s in h["nearest_stations"]], [1, 2])  # both at Kypseli's centre
         self.assertIn("temperature", h["nearest_stations"][0])
@@ -551,8 +507,8 @@ class Assistant(unittest.TestCase):
 
     def test_topics(self):
         t = self.a.topic
-        self.assertEqual([t("Πώς είναι ο αέρας;"), t("ΖΈΣΤΗ σήμερα!"), t("kanei zesti?"), t("air quality near me")],
-                         ["air", "heat", "heat", "air"])
+        self.assertEqual([t("ΖΈΣΤΗ σήμερα!"), t("kanei zesti?"), t("what's the temperature?")], ["heat", "heat", "heat"])
+        self.assertIsNone(t("Πώς είναι ο αέρας;"))  # air quality is not answered here → city bot
         self.assertEqual(t("κάνει ζέστη, πού να δροσιστώ;"), "cooling")  # cooling wins
         self.assertIsNone(t("Θέλω ραντεβού για πιστοποιητικό γέννησης"))  # → city bot
 
@@ -587,24 +543,23 @@ class Assistant(unittest.TestCase):
         self.assertIn("retry in", str(e.exception))
 
     def test_local_answers(self):
-        r = self.a.ask("πώς είναι ο αέρας;")                         # no location, no key needed
+        r = self.a.ask("κάνει ζέστη;")                               # no location, no key needed
         self.assertEqual((r["source"], r["state"]["awaiting"]), ("athens-pulse", "location"))
-        here = {"zone": {"air": {"pollution_pct_avg": 29}},
-                "nearest_stations": [{"name": "Πλ. Συντάγματος", "distance_m": 6, "pollution_pct": 36,
-                                      "pollution_level": "Moderate", "temperature": 22.1, "feels_like": 22.1,
-                                      "heat_level": "none", "lat": 37.975, "lon": 23.735, "station_id": 161}]}
+        here = {"zone": {}, "nearest_stations": [{"name": "Πλ. Συντάγματος", "distance_m": 6, "temperature": 22.1,
+                                                  "feels_like": 22.1, "heat_level": "none", "lat": 37.975, "lon": 23.735,
+                                                  "station_id": 161}]}
         with mock.patch.object(env, "data", return_value=({}, None)), mock.patch.object(env, "here", return_value=here):
-            air = self.a.ask("πώς είναι ο αέρας;", lat=37.975, lon=23.735)
-            heat = self.a.ask("is it hot?", lat=37.975, lon=23.735)
-        self.assertIn("36%", air["text"]); self.assertIn("Μέτρια", air["text"]); self.assertIn("29%", air["text"])
-        self.assertIn("22.1 °C", heat["text"]); self.assertEqual(heat["intent"]["name"], "heat")
-        self.assertNotIn("**", air["speech"])                         # speech is plain text for TTS
+            el = self.a.ask("κάνει ζέστη;", lat=37.975, lon=23.735)
+            en = self.a.ask("is it hot?", lat=37.975, lon=23.735)
+        self.assertIn("22.1 °C", el["text"]); self.assertIn("κανονική", el["text"])
+        self.assertEqual(en["intent"]["name"], "heat"); self.assertIn("feels like", en["text"])
+        self.assertNotIn("**", el["speech"])                          # speech is plain text for TTS
 
     def test_endpoint_validation_and_key_safety(self):
         spec = importlib.util.spec_from_file_location("t_assistant", os.path.join(ROOT, "api", "assistant.py"))
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
-        call = lambda body: run(lambda q: mod.get(q, body), "/api/assistant")  # noqa: E731
+        call = lambda body: run(lambda q: mod.get(q, body, "1.1.1.1"), "/api/assistant")  # noqa: E731
         self.assertEqual(call({})[0], 400)
         self.assertEqual(call({"text": "ΚΕΠ", "conversation_id": "../../admin"})[0], 400)
         self.assertEqual(call({"text": "ΚΕΠ", "lat": 999, "lon": 1})[0], 400)
@@ -685,6 +640,70 @@ class Tourism(unittest.TestCase):
         self.assertEqual([(e["id"], e["distance_m"]) for e in near], [("e1", 0)])
 
 
+class Presence(unittest.TestCase):
+    def setUp(self):
+        from athens import presence
+        self.p, self.store = presence, presence.MemoryStore()
+        self.calls = []
+
+        def request(url, headers, body):  # an Upstash pipeline backed by the in-memory store
+            self.calls.append((url, headers, json.loads(body)))
+            return [{"result": self.store.run(c)} for c in json.loads(body)]
+        self.req = request
+        self.env = mock.patch.dict(os.environ, {"KV_REST_API_URL": "https://kv.example", "KV_REST_API_TOKEN": "tok",
+                                                "PRESENCE_STORE": ""})
+        self.env.start()
+        self.addCleanup(self.env.stop)
+
+    def ping(self, session, lat, lon, ip="1.2.3.4", now=None):
+        return self.p.ping(session, lat, lon, ip, now=now, request=self.req)
+
+    def test_counts_threshold_and_privacy(self):
+        now = 1_800_000_000
+        for i in range(2):
+            self.ping(f"session-{i:010d}", 37.97551, 23.73481, now=now)
+        self.assertEqual(self.p.crowds(now=now, request=self.req)["cells"], [])  # 2 people: never shown
+        self.ping("session-0000000002", 37.97559, 23.73489, now=now)             # same ~220 m cell
+        cells = self.p.crowds(now=now, request=self.req)["cells"]
+        self.assertEqual([(c["count"], c["level"]) for c in cells], [(3, "crowd_low")])
+        stored = json.dumps(self.store.kv) + json.dumps(self.store.z)
+        for leak in ("session-0000000002", "37.975", "1.2.3.4"):                 # no raw id, position or IP stored
+            self.assertNotIn(leak, stored)
+        self.assertEqual(self.calls[0][0], "https://kv.example/pipeline")
+        self.assertEqual(self.calls[0][1]["Authorization"], "Bearer tok")
+
+    def test_moving_counts_once_and_expiry(self):
+        now = 1_800_000_000
+        for i in range(3):
+            self.ping(f"walker-{i:010d}", 37.9755, 23.7348, now=now)
+        self.ping("walker-0000000000", 37.9900, 23.7400, now=now + 60)           # walked to another cell
+        self.assertEqual(self.p.crowds(now=now + 60, request=self.req)["cells"], [])  # 2 left in the first cell
+        self.assertEqual(self.p.crowds(now=now + 16 * 60, request=self.req)["cells"], [])  # all expired
+
+    def test_big_crowds_are_rounded_and_abuse_is_limited(self):
+        now = 1_800_000_000
+        for i in range(23):
+            self.ping(f"crowd-{i:011d}", 37.9755, 23.7348, ip=f"10.0.0.{i}", now=now)
+        cell = self.p.crowds(now=now, request=self.req)["cells"][0]
+        self.assertEqual((cell["count"], cell["level"]), (20, "crowd_medium"))   # 23 → "20+"
+        with mock.patch.object(self.p, "PINGS_PER_IP", 2):
+            self.ping("spam-00000000000001", 37.9755, 23.7348, ip="6.6.6.6", now=now)
+            self.ping("spam-00000000000002", 37.9755, 23.7348, ip="6.6.6.6", now=now)
+            with self.assertRaises(self.p.RateLimited):
+                self.ping("spam-00000000000003", 37.9755, 23.7348, ip="6.6.6.6", now=now)
+
+    def test_endpoint(self):
+        spec = importlib.util.spec_from_file_location("t_presence", os.path.join(ROOT, "api", "presence.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        bad = run(lambda q: mod.get(q, {"session": "x", "lat": 37.9, "lon": 23.7}, "1.1.1.1"), "/api/presence")
+        self.assertEqual(bad[0], 400)
+        with mock.patch.dict(os.environ, {"KV_REST_API_URL": "", "PRESENCE_STORE": ""}):
+            off = run(lambda q: mod.get(q, {"session": "s" * 20, "lat": 37.9, "lon": 23.7}, "1.1.1.1"), "/api/presence")
+        self.assertEqual(off[0], 503)
+        self.assertEqual(ROUTES["/api/presence"][1:], ("private, no-store", "POST"))
+
+
 class Http(unittest.TestCase):
     def test_int_param(self):
         self.assertEqual(int_param({"days": "7"}, "days", 30, 1, 90), 7)
@@ -735,7 +754,7 @@ class Http(unittest.TestCase):
             self.assertTrue(hasattr(mod, "handler"), f)
         self.assertEqual(ROUTES["/api/here"][1], "private, no-store")  # personal location: never cached
         self.assertEqual(ROUTES["/api/track"][1], "private, no-store")
-        self.assertEqual(sorted(ROUTES), ["/api/air", "/api/assistant", "/api/config", "/api/events", "/api/health", "/api/heat", "/api/here", "/api/i18n", "/api/places", "/api/stations", "/api/track", "/api/traffic", "/api/zones"])
+        self.assertEqual(sorted(ROUTES), ["/api/assistant", "/api/config", "/api/crowds", "/api/ev", "/api/events", "/api/health", "/api/heat", "/api/here", "/api/i18n", "/api/metro", "/api/places", "/api/presence", "/api/stations", "/api/track", "/api/traffic", "/api/zones"])
 
 
 if __name__ == "__main__":

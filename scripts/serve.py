@@ -1,4 +1,4 @@
-"""Local dev server with the same routes as Vercel, no Vercel CLI needed.
+"""Local dev server with the same routes as Vercel, no Vercel CLI needed; / = the test UI (devtools/test-ui.html).
 Reads .env.local (like `vercel dev`). Usage: python3 scripts/serve.py [port]      (default 8000)
 """
 import importlib.util
@@ -16,7 +16,9 @@ if os.path.exists(env_file):
         k, sep, v = line.strip().partition("=")
         if sep and k and not k.startswith("#"):
             os.environ.setdefault(k.strip(), v.strip().strip('"'))
-from athens.http import ROUTES, preflight, read_json, respond, run  # noqa: E402
+if not os.environ.get("KV_REST_API_URL"):  # no Upstash locally: count live crowds in this process
+    os.environ.setdefault("PRESENCE_STORE", "memory")
+from athens.http import ROUTES, client_ip, preflight, read_json, respond, run  # noqa: E402
 
 for f in sorted(os.listdir(os.path.join(ROOT, "api"))):
     if f.endswith(".py"):
@@ -37,6 +39,13 @@ class Dispatch(BaseHTTPRequestHandler):
         return r
 
     def do_GET(self):
+        if urlparse(self.path).path == "/":  # the test UI: one fixed file, nothing else is served from disk
+            data = open(os.path.join(ROOT, "devtools", "test-ui.html"), "rb").read()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            return self.wfile.write(data)
         r = self.route("GET")
         if r:
             respond(self, *run(r[0], self.path), r[1])
@@ -44,7 +53,7 @@ class Dispatch(BaseHTTPRequestHandler):
     def do_POST(self):
         r = self.route("POST")
         if r:
-            respond(self, *run(lambda q: r[0](q, read_json(self)), self.path), r[1])
+            respond(self, *run(lambda q: r[0](q, read_json(self), client_ip(self)), self.path), r[1])
 
     def do_OPTIONS(self):
         preflight(self)

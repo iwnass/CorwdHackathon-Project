@@ -51,7 +51,7 @@ def _clean(s):
     return re.sub(r"\s+", " ", (s or "").replace(" - ", " ").strip(" -")) or None
 
 
-def load(get=ckan.http_get):
+def load(get=cooling.gis_get):
     out = []
     got = cooling.layers(["geonode:politismos24_f", "geonode:toponymia", "geonode:stasy2024", "geonode:wifi4eu",
                           "geonode:parking_amea"], get)
