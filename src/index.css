@@ -1,0 +1,121 @@
+@import 'tailwindcss';
+
+/* Dark mode is toggled by adding the `dark` class on <html> */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+  WHOLE-PAGE THEME
+  --primary* are set at runtime by ThemeContext (src/utils/themes.js).
+  Every surface below is mixed FROM the primary color, so picking a color in
+  Settings re-tints the background, cards, sidebar, borders, skeletons… not
+  just the charts.
+*/
+:root {
+  --primary: #06b6d4;
+  --primary-light: #22d3ee;
+  --primary-lighter: #cffafe;
+  --primary-dark: #0891b2;
+  --primary-darker: #155e75;
+
+  --bg: color-mix(in oklab, var(--primary) 9%, #ffffff);
+  --surface: color-mix(in oklab, var(--primary) 3%, #ffffff);
+  --surface-2: color-mix(in oklab, var(--primary) 10%, #ffffff);
+  --line: color-mix(in oklab, var(--primary) 22%, #e5e7eb);
+  --skel: color-mix(in oklab, var(--primary) 16%, #e5e7eb);
+  --ink: color-mix(in oklab, var(--primary-darker) 35%, #1f2937);
+  --muted: color-mix(in oklab, var(--primary-darker) 25%, #6b7280);
+}
+
+.dark {
+  --bg: color-mix(in oklab, var(--primary) 9%, #05070c);
+  --surface: color-mix(in oklab, var(--primary) 12%, #0b0f19);
+  --surface-2: color-mix(in oklab, var(--primary) 20%, #0b0f19);
+  --line: color-mix(in oklab, var(--primary) 28%, #1e293b);
+  --skel: color-mix(in oklab, var(--primary) 22%, #1e293b);
+  --ink: color-mix(in oklab, var(--primary-lighter) 25%, #f1f5f9);
+  --muted: color-mix(in oklab, var(--primary-light) 25%, #94a3b8);
+}
+
+@theme inline {
+  --font-sans: 'Noto Sans', ui-sans-serif, system-ui, sans-serif;
+  --color-primary: var(--primary);
+  --color-primary-light: var(--primary-light);
+  --color-primary-lighter: var(--primary-lighter);
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-darker: var(--primary-darker);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-skel: var(--skel);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-coffee: #ffdd00;
+  /* landing page fonts (Noto Sans covers Greek / Cyrillic fallbacks) */
+  --font-display: 'Unbounded', 'Noto Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-landing: 'Instrument Sans', 'Noto Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-brand: 'Bungee', ui-sans-serif, system-ui, sans-serif;
+}
+
+@theme {
+  --animate-blink: blink 4s infinite;
+  --animate-float: float 3s ease-in-out infinite;
+  --animate-nudge: nudge 1.6s ease-in-out infinite;
+  --animate-slap: slap 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  /* phone tab change: 3D turn in from the side of the tapped tab */
+  --animate-turn-from-right: turn-from-right 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-turn-from-left: turn-from-left 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @keyframes blink {
+    0%, 92%, 100% { transform: scaleY(1); }
+    95% { transform: scaleY(0.1); }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
+  /* landing stickers being slapped on */
+  @keyframes slap {
+    from { transform: rotate(var(--r)) scale(1.6); opacity: 0; }
+    to { transform: rotate(var(--r)) scale(1); opacity: 1; }
+  }
+  @keyframes turn-from-right {
+    from { transform: translateX(45%) rotateY(-50deg) scale(0.9); opacity: 0; }
+    to { transform: none; opacity: 1; }
+  }
+  @keyframes turn-from-left {
+    from { transform: translateX(-45%) rotateY(50deg) scale(0.9); opacity: 0; }
+    to { transform: none; opacity: 1; }
+  }
+  /* scroll-down arrow */
+  @keyframes nudge {
+    0%, 100% { transform: translateY(0); opacity: 0.6; }
+    50% { transform: translateY(7px); opacity: 1; }
+  }
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  transition: background-color 0.3s;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--primary) 45%, transparent) transparent;
+}
+
+/* White sticker outline + shadow (landing page) */
+@utility sticker-outline {
+  filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff)
+    drop-shadow(0 -2px 0 #fff) drop-shadow(0 6px 8px rgba(0, 0, 0, 0.45));
+}
+
+/* Chinese / Japanese / Arabic: use the matching Noto font (loaded on demand) */
+:lang(zh-Hant) body { font-family: 'Noto Sans TC', var(--font-sans); }
+:lang(ja) body { font-family: 'Noto Sans JP', var(--font-sans); }
+:lang(ar) body { font-family: 'Noto Sans Arabic', var(--font-sans); }
