@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@fontsource/bungee": "^5.3.0",
+    "@maptiler/sdk": "^3.11.2",
     "apexcharts": "^8.9.1",
     "chart.js": "^4.6.1",
     "ogl": "^1.0.11",

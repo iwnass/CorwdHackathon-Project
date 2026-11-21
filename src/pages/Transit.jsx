@@ -5,6 +5,7 @@ import SaturdayReminder from '../components/transit/SaturdayReminder'
 import { Card, ErrorState } from '../components/ui/Card'
 import { CrosshairIcon } from '../components/ui/Icons'
 import LocateButton from '../components/ui/LocateButton'
+import { useUserLocation } from '../hooks/useUserLocation'
 import ScrollHint from '../components/ui/ScrollHint'
 import { ListSkeleton, Skeleton } from '../components/ui/Skeleton'
 import { useApi } from '../hooks/useApi'
@@ -19,30 +20,6 @@ const NEARBY_COUNT = 5
 // Distances are measured from Syntagma Square until the user shares their location
 const SYNTAGMA = { lat: 37.9755, lng: 23.7348 }
 const pick = (obj, lang) => (typeof obj === 'string' ? obj : (obj?.[lang] ?? obj?.en))
-
-// Browser location (asked only when the user taps the button, or if already allowed)
-function useUserLocation() {
-  const [state, setState] = useState({ pos: null, status: 'idle' }) // idle | locating | ok | denied
-
-  const locate = () => {
-    if (!navigator.geolocation) return setState({ pos: null, status: 'denied' })
-    setState((s) => ({ ...s, status: 'locating' }))
-    navigator.geolocation.getCurrentPosition(
-      (p) => setState({ pos: { lat: p.coords.latitude, lng: p.coords.longitude }, status: 'ok' }),
-      () => setState({ pos: null, status: 'denied' }),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
-    )
-  }
-
-  useEffect(() => {
-    navigator.permissions
-      ?.query({ name: 'geolocation' })
-      .then((r) => r.state === 'granted' && locate())
-      .catch(() => {})
-  }, [])
-
-  return { ...state, locate }
-}
 
 export default function Transit() {
   const { t, lang } = useLang()
@@ -79,6 +56,8 @@ export default function Transit() {
         loadingData={stations.loading}
         chips={nearby.map((s) => ({
           id: s.id,
+          lat: s.lat,
+          lng: s.lng,
           label: `${pick(s.name, lang)} · ${formatDist(s.dist)}`,
           color: lineById[s.lines[0]]?.color ?? '#94a3b8',
         }))}
@@ -211,7 +190,7 @@ export default function Transit() {
                         <div>
                           <dt className="text-[11px] uppercase tracking-wide text-muted">{t('transit.lastToday')}</dt>
                           <dd className={`font-semibold tabular-nums ${last === '24h' ? 'text-primary' : 'text-ink'}`}>
-                            {last === '24h' ? `🌙 ${t('transit.allNight')}` : `${l.approx ? '≈ ' : ''}${last}`}
+                            {last === '24h' ? t('transit.allNight') : `${l.approx ? '≈ ' : ''}${last}`}
                           </dd>
                         </div>
                         <div className="col-span-2 flex flex-wrap items-end gap-1.5 text-xs">

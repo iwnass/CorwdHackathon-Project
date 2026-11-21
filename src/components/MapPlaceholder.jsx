@@ -1,56 +1,94 @@
-import { forwardRef, useEffect, useState } from 'react'
+import { Language, MapStyle, Map as MtMap, Marker, config as mtConfig } from '@maptiler/sdk'
+import '@maptiler/sdk/dist/maptiler-sdk.css'
+import { forwardRef, useEffect, useRef, useState } from 'react'
 import { CircleLoader } from 'react-spinners'
 import { config } from '../config'
+import { useTheme } from '../context/ThemeContext'
+import { useUserLocation } from '../hooks/useUserLocation'
 import { useLang } from '../i18n/LanguageContext'
-import { CloseIcon, ExternalIcon, MapPinIcon } from './ui/Icons'
+import { CloseIcon, CrosshairIcon, ExternalIcon, MapPinIcon } from './ui/Icons'
+
+const MT_LANG = { zh: Language.TRADITIONAL_CHINESE } // the app's other codes are MapTiler codes as they are
+const style = (dark) => (dark ? MapStyle.STREETS.DARK : MapStyle.STREETS)
+
+/** Interactive MapTiler map: flies to `target`, draws a marker for every chip with lat/lng and for `focus`. */
+function TileMap({ target, zoom, chips, focus, user, userLabel, onLoad }) {
+  const { lang } = useLang()
+  const { isDark } = useTheme()
+  const box = useRef(null)
+  const map = useRef(null)
+  const markers = useRef([])
+
+  useEffect(() => {
+    mtConfig.apiKey = config.maptilerKey
+    map.current = new MtMap({
+      container: box.current, style: style(isDark), center: [target.lng, target.lat], zoom,
+      language: MT_LANG[lang] ?? lang, navigationControl: 'bottom-right', geolocateControl: false,
+    })
+    map.current.once('load', onLoad)
+    return () => map.current.remove()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- created once; the effects below keep it in sync
+
+  useEffect(() => { map.current.setStyle(style(isDark)) }, [isDark])
+  useEffect(() => { map.current.setLanguage(MT_LANG[lang] ?? lang) }, [lang])
+  useEffect(() => { map.current.flyTo({ center: [target.lng, target.lat], zoom }) }, [target.lat, target.lng, zoom])
+  // a new position from "Use my location": go there (unless the user is looking at a chosen place)
+  useEffect(() => { if (user && !focus) map.current.flyTo({ center: [user.lng, user.lat], zoom: 15 }) }, [user?.lat, user?.lng]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // chips change identity on every parent render: rebuild the markers only when what they show changes
+  const points = [
+    ...chips.filter((c) => c.lat != null),
+    ...(focus ? [{ ...focus, color: '#e11d48' }] : []),
+    ...(user ? [{ id: 'me', ...user, color: '#dc2626', label: userLabel }] : []), // "you are here"
+  ]
+  const pointsKey = points.map((p) => `${p.id}|${p.lat}|${p.lng}|${p.color}`).join()
+  useEffect(() => {
+    markers.current.forEach((m) => m.remove())
+    markers.current = points.map((p) => {
+      const m = new Marker({ color: p.color }).setLngLat([p.lng, p.lat]).addTo(map.current)
+      m.getElement().title = p.label ?? ''
+      return m
+    })
+  }, [pointsKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return <div ref={box} className="h-full w-full" />
+}
 
 /**
- * Google Map placeholder (keyless embed, in the user's language).
+ * The page map: MapTiler (interactive, markers). Needs VITE_MAPTILER_KEY.
  *
  * props
- *   chips:   [{ id, label, color }]  small labels at the bottom (stations, chargers…)
+ *   chips:   [{ id, label, color, lat?, lng? }]  small labels at the bottom; with lat/lng also a marker on the map
  *   overlay: small card top-left (any content)
  *   center:  { lat, lng } to centre the map on (default: Athens centre)
- *   focus:   { lat, lng, label } → map zooms there + "Open in Google Maps" link
+ *   focus:   { lat, lng, label } → map flies there + "Open in Google Maps" link (directions in the visitor's app)
  *   onClearFocus: called by the "Show all Athens" button
- *
- * To switch to a real interactive map, install `@vis.gl/react-google-maps`,
- * set VITE_GOOGLE_MAPS_API_KEY and replace the <iframe>; the props stay the same.
  */
 const MapPlaceholder = forwardRef(function MapPlaceholder(
   { chips = [], overlay, center, loadingData = false, focus, onClearFocus, height = 'h-56 sm:h-64 lg:h-[clamp(220px,36vh,380px)]' },
   ref,
 ) {
-  const { t, mapsLang } = useLang()
+  const { t } = useLang()
+  const { pos, status, locate } = useUserLocation()
   const [mapLoaded, setMapLoaded] = useState(false)
-  const [minTimeDone, setMinTimeDone] = useState(false)
 
   const target = focus ?? center ?? config.athensCenter
   const zoom = focus ? 17 : center ? 15 : 13
-  const src = `https://maps.google.com/maps?q=${target.lat},${target.lng}&z=${zoom}&hl=${mapsLang}&output=embed`
-
-  // Show the loader each time the map changes (first load, language, focus)
-  useEffect(() => {
-    setMapLoaded(false)
-    setMinTimeDone(false)
-    const id = setTimeout(() => setMinTimeDone(true), focus ? 500 : 900)
-    return () => clearTimeout(id)
-  }, [src, focus])
-
-  const showLoader = !mapLoaded || !minTimeDone
+  const tiles = Boolean(config.maptilerKey)
+  const showLoader = tiles && !mapLoaded
   const googleLink = `https://www.google.com/maps/search/?api=1&query=${target.lat},${target.lng}`
 
   return (
     <div ref={ref} className={`relative scroll-mt-4 overflow-hidden rounded-xl bg-surface-2 ring-1 ring-line ${height}`}>
-      <iframe
-        key={src}
-        title={t('map.title')}
-        src={src}
-        className={`h-full w-full border-0 transition-opacity duration-500 dark:brightness-90 ${showLoader ? 'opacity-0' : 'opacity-100'}`}
-        loading="lazy"
-        referrerPolicy="no-referrer-when-downgrade"
-        onLoad={() => setMapLoaded(true)}
-      />
+      {tiles ? (
+        <div className={`h-full w-full transition-opacity duration-500 ${showLoader ? 'opacity-0' : 'opacity-100'}`}>
+          <TileMap target={target} zoom={zoom} chips={chips} focus={focus} user={pos} userLabel={t('transit.fromYou')} onLoad={() => setMapLoaded(true)} />
+        </div>
+      ) : (
+        <p className="flex h-full items-center justify-center p-6 text-center text-sm text-muted">
+          Map unavailable: set VITE_MAPTILER_KEY in .env.local (free key at maptiler.com) and restart the app.
+        </p>
+      )}
 
       {showLoader && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-surface-2">
@@ -85,6 +123,17 @@ const MapPlaceholder = forwardRef(function MapPlaceholder(
             </button>
           )}
         </div>
+      )}
+
+      {tiles && !showLoader && !focus && (
+        <button
+          onClick={locate}
+          disabled={status === 'locating'}
+          className="absolute end-3 top-3 z-10 flex items-center gap-1.5 rounded-full bg-primary px-3 py-2 text-xs font-semibold text-white shadow-md transition hover:bg-primary-dark disabled:opacity-60"
+        >
+          <CrosshairIcon className={`h-4 w-4 ${status === 'locating' ? 'animate-spin' : ''}`} />
+          {status === 'locating' ? t('transit.locating') : t('transit.useLocation')}
+        </button>
       )}
 
       {!showLoader && !focus && (overlay || loadingData) && (

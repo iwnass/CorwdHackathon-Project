@@ -19,7 +19,7 @@ export default function Events() {
   const list = useMemo(() => {
     const rows = [...(events.data ?? [])]
     return sort === 'popular'
-      ? rows.sort((a, b) => b.popularity - a.popularity)
+      ? rows.sort((a, b) => (b.popularity ?? -1) - (a.popularity ?? -1))
       : rows.sort((a, b) => a.date.localeCompare(b.date))
   }, [events.data, sort])
 
@@ -40,7 +40,8 @@ export default function Events() {
         title={t('events.upcoming')}
         bodyClassName="px-3 py-1 sm:px-4"
         action={
-          <div role="group" aria-label={t('events.sortBy')} className="flex rounded-full bg-primary/10 p-0.5 text-xs font-semibold">
+          // sorting by popularity only when the data has it (the real events feed does not)
+          (events.data ?? []).some((e) => e.popularity != null) && <div role="group" aria-label={t('events.sortBy')} className="flex rounded-full bg-primary/10 p-0.5 text-xs font-semibold">
             {[
               ['date', t('events.sortDate')],
               ['popular', t('events.sortPopular')],
@@ -89,8 +90,8 @@ export default function Events() {
                         <EventsIcon className="h-3 w-3" />
                         {e.type}
                       </span>
-                      {/* average price per person */}
-                      <span
+                      {/* average price per person (unknown → not shown: never claim "free" without data) */}
+                      {e.pricePerPerson != null && <span
                         title={t('events.avgPrice')}
                         className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
                           p ? 'bg-surface-2 text-ink ring-1 ring-line' : 'bg-green-500/15 text-green-700 dark:text-green-300'
@@ -103,11 +104,11 @@ export default function Events() {
                         ) : (
                           t('events.free')
                         )}
-                      </span>
+                      </span>}
                     </div>
 
-                    {/* popularity rate */}
-                    <div className="mt-2 flex max-w-xs items-center gap-2" title={`${t('events.popularity')}: ${e.popularity}%`}>
+                    {/* popularity rate (only when the backend has it) */}
+                    {e.popularity != null && (<div className="mt-2 flex max-w-xs items-center gap-2" title={`${t('events.popularity')}: ${e.popularity}%`}>
                       <FlameIcon className={`h-4 w-4 shrink-0 ${e.popularity >= 80 ? 'text-orange-500' : 'text-primary'}`} />
                       <div
                         className="h-1.5 flex-1 overflow-hidden rounded-full bg-skel"
@@ -123,8 +124,8 @@ export default function Events() {
                         />
                       </div>
                       <span className="text-xs font-semibold tabular-nums text-ink">{e.popularity}%</span>
-                      <span className="hidden text-xs text-muted sm:inline">· {t('events.interested', { n: compact(e.interested) })}</span>
-                    </div>
+                      {e.interested != null && <span className="hidden text-xs text-muted sm:inline">· {t('events.interested', { n: compact(e.interested) })}</span>}
+                    </div>)}
                   </div>
 
                   {/* location point button */}

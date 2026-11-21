@@ -13,6 +13,7 @@ import { useLang } from '../i18n/LanguageContext'
 import { api } from '../services/api'
 
 const TWO_MIN = 2 * 60 * 1000
+const TOP = 12 // chips and bar chart: a few hundred real chargers would be unreadable
 const hh = (h) => `${String(h).padStart(2, '0')}:00`
 
 // Status → color + translation key
@@ -28,7 +29,8 @@ export default function EvCharging() {
   const usage = useApi(api.getEvUsage, [lang])
   const { mapRef, focus, focusOn, clearFocus } = useMapFocus()
 
-  const list = stations.data ?? []
+  const list = [...(stations.data ?? [])].sort((a, b) => b.available - a.available)
+  const top = list.slice(0, TOP)
   const freeNow = list.reduce((a, s) => a + s.available, 0)
   const euro = (v) => new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(v)
 
@@ -39,8 +41,10 @@ export default function EvCharging() {
         focus={focus}
         onClearFocus={clearFocus}
         loadingData={stations.loading}
-        chips={list.map((s) => ({
+        chips={top.map((s) => ({
           id: s.id,
+          lat: s.lat,
+          lng: s.lng,
           label: `${s.name} · ${s.available}/${s.total}`,
           color: EV_STATUS[s.status].color,
           title: t(EV_STATUS[s.status].key),
@@ -63,12 +67,12 @@ export default function EvCharging() {
 
       <div className="grid gap-4 xl:grid-cols-2">
         <ChartCard title={t('ev.free')} query={stations}>
-          {(rows) => (
+          {() => (
             <BarChart
               label={t('ev.available')}
-              labels={rows.map((s) => s.name)}
-              values={rows.map((s) => s.available)}
-              colors={rows.map((s) => EV_STATUS[s.status].color)}
+              labels={top.map((s) => s.name)}
+              values={top.map((s) => s.available)}
+              colors={top.map((s) => EV_STATUS[s.status].color)}
               integer
             />
           )}
@@ -81,7 +85,7 @@ export default function EvCharging() {
               series={[
                 { name: t('series.today'), data: rows.map((r) => ({ x: hh(r.hour), y: r.occupancy })) },
                 { name: t('series.typical'), data: rows.map((r) => ({ x: hh(r.hour), y: r.typical })) },
-              ]}
+              ].filter((s) => s.data.some((p) => p.y != null))}
             />
           )}
         </ChartCard>
@@ -115,8 +119,8 @@ export default function EvCharging() {
                       <span className="rounded-full px-2 py-0.5 font-semibold" style={{ background: `${status.color}26`, color: status.color }}>
                         {s.status === 'offline' ? t(status.key) : `${s.available}/${s.total} ${t('ev.available')}`}
                       </span>
-                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary-dark dark:text-primary-light">{s.powerKw} kW</span>
-                      <span className="rounded-full bg-surface-2 px-2 py-0.5 text-ink ring-1 ring-line">{euro(s.pricePerKwh)}/kWh</span>
+                      {s.powerKw != null && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary-dark dark:text-primary-light">{s.powerKw} kW</span>}
+                      {s.pricePerKwh != null && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-ink ring-1 ring-line">{euro(s.pricePerKwh)}/kWh</span>}
                       <span className="text-muted">{s.connectors.join(' · ')}</span>
                     </div>
                   </div>
