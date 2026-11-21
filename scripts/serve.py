@@ -16,7 +16,7 @@ if os.path.exists(env_file):
         k, sep, v = line.strip().partition("=")
         if sep and k and not k.startswith("#"):
             os.environ.setdefault(k.strip(), v.strip().strip('"'))
-from athens.http import ROUTES, respond, run  # noqa: E402
+from athens.http import ROUTES, preflight, read_json, respond, run  # noqa: E402
 
 for f in sorted(os.listdir(os.path.join(ROOT, "api"))):
     if f.endswith(".py"):
@@ -29,12 +29,25 @@ class Dispatch(BaseHTTPRequestHandler):
         args = tuple(a.split("?", 1)[0] if isinstance(a, str) and "?" in a else a for a in args)
         super().log_message(fmt, *args)
 
+    def route(self, method):
+        r = ROUTES.get(urlparse(self.path).path.rstrip("/"))
+        if r is None or r[2] != method:
+            respond(self, 404 if r is None else 405, {"error": "not found", "routes": sorted(ROUTES)})
+            return None
+        return r
+
     def do_GET(self):
-        route = ROUTES.get(urlparse(self.path).path.rstrip("/"))
-        if route is None:
-            return respond(self, 404, {"error": "not found", "routes": sorted(ROUTES)})
-        fn, cache = route
-        respond(self, *run(fn, self.path), cache)
+        r = self.route("GET")
+        if r:
+            respond(self, *run(r[0], self.path), r[1])
+
+    def do_POST(self):
+        r = self.route("POST")
+        if r:
+            respond(self, *run(lambda q: r[0](q, read_json(self)), self.path), r[1])
+
+    def do_OPTIONS(self):
+        preflight(self)
 
 
 if __name__ == "__main__":

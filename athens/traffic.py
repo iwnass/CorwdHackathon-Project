@@ -11,15 +11,15 @@ import os
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
-from statistics import mean
+from statistics import mean, median
 
 from . import cache, ckan
 from .geo import haversine
 
 REGISTRY = "wifi-stations-registry"
 TTL_S = int(os.environ.get("ATHENS_WIFI_TTL_S", 1800))  # the data is daily
-DAYS = 15
-ROWS = DAYS * 120  # ~81 stations per day, newest first
+DAYS = 63  # 9 weeks: enough for "a usual Tuesday" per spot
+ROWS = DAYS * 90  # ~81 stations per day, newest first
 METRICS = {  # our name → (registry column with the aggregated resource id, value column)
     "visits": ("agg_cumulative_traffic_resource_id", "cumulative_traffic"),
     "visitors": ("agg_active_visitors_resource_id", "active_visitors"),
@@ -27,6 +27,8 @@ METRICS = {  # our name → (registry column with the aggregated resource id, va
 }
 BUSY, QUIET = 1.25, 0.75  # visits vs the station's own previous-7-day average
 MAX_HISTORY_DAYS = 90
+NEAR_M, NEAR_K = 1000, 5  # "around this point": WiFi spots within 1 km, at most 5
+WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 
 def _locations(get):
@@ -53,7 +55,7 @@ def _merge(metric_rows):
         col = METRICS[m][1]
         for r in rows:
             sid, v = ckan.as_int(r.get("station_id")), ckan.num(r.get(col))
-            if sid is not None and r.get("date") and v is not None:
+            if sid is not None and r.get("date") and v:  # 0 = the WiFi was down that day (~5 % of days), not an empty square
                 days[sid][str(r["date"])[:10]][m] = int(v) if v.is_integer() else v
     return days
 
@@ -67,7 +69,8 @@ def load(get=ckan.http_get):
     resources = _resources(registry)
     with ThreadPoolExecutor(4) as ex:
         locs = ex.submit(_locations, get)
-        rows = {m: ex.submit(ckan.datastore, rid, get, sort="_id desc", limit=ROWS) for m, rid in resources.items()}
+        rows = {m: ex.submit(ckan.datastore, rid, get, sort="_id desc", limit=ROWS, fields=f"station_id,date,{METRICS[m][1]}")
+                for m, rid in resources.items()}
         rows = {m: f.result() for m, f in rows.items()}
         locs = locs.result()
     info = {}
@@ -113,7 +116,7 @@ def overview(d):
         st.append({**info, "date": last, "visits": today.get("visits"), "visitors": today.get("visitors"),
                    "peak_visitors": today.get("peak_visitors"),
                    "visits_prev_day": (days.get(_day(last, -1)) or {}).get("visits"),
-                   "visits_7d_avg": avg, "change_vs_7d_pct": change, "busyness": level})
+                   "visits_7d_avg": avg, "change_vs_7d_pct": change, "busyness": level, **_patterns(days, last)})
     st.sort(key=lambda s: -(s.get("visits") or 0))
 
     totals = defaultdict(lambda: {"visits": 0, "visitors": 0, "stations": 0})
@@ -140,6 +143,60 @@ def overview(d):
         city = {**latest, "visits_7d_avg": avg, "change_vs_7d_pct": change, "busyness": level,
                 "busiest": [s["station_id"] for s in st if s.get("date") == latest["date"]][:10]}
     return {"kind": "wifi_footfall", "city": city, "daily": daily, "stations": st}
+
+
+def _patterns(days, last):
+    """From the last 8 weeks of one spot: a usual day like `last`, its busiest weekday, and the 7- vs 28-day trend."""
+    visits = {x: m["visits"] for x, m in days.items() if "visits" in m and _day(last, -56) <= x <= last}
+    wd = lambda x: date.fromisoformat(x).weekday()  # noqa: E731
+    same = [v for x, v in visits.items() if x < last and wd(x) == wd(last)]
+    by_wd = defaultdict(list)
+    for x, v in visits.items():
+        by_wd[wd(x)].append(v)
+    full = {k: median(v) for k, v in by_wd.items() if len(v) >= 2}
+    recent = [v for x, v in visits.items() if x > _day(last, -7)]
+    before = [v for x, v in visits.items() if _day(last, -35) < x <= _day(last, -7)]
+    trend = round((mean(recent) / mean(before) - 1) * 100, 1) if recent and len(before) >= 7 else None
+    return {"usual_for_weekday": round(median(same)) if len(same) >= 2 else None,
+            "busiest_weekday": WEEKDAYS[max(full, key=full.get)] if len(full) == 7 else None,
+            "trend_7d_vs_28d_pct": trend}
+
+
+def at_point(d, lat, lon):
+    """Footfall around a point: the WiFi spots within NEAR_M and one index of how busy the area is vs normal.
+    The index averages each spot's own ratio to its usual (not raw counts: a big square would swamp a small one),
+    weighting closer spots more (1/d², 50 m floor)."""
+    st = [dict(s) for s in overview(d)["stations"] if s.get("lat") is not None and s.get("date")]
+    for s in st:
+        s["distance_m"] = round(haversine(lat, lon, s["lat"], s["lon"]))
+    st.sort(key=lambda s: s["distance_m"])
+    near = [s for s in st if s["distance_m"] <= NEAR_M][:NEAR_K]
+    w = [(1 / max(s["distance_m"], 50) ** 2, s["visits"] / s["visits_7d_avg"]) for s in near
+         if s.get("visits") and s.get("visits_7d_avg")]
+    change = level = None
+    if w:
+        ratio = sum(a * r for a, r in w) / sum(a for a, _ in w)
+        change, level = _busyness(ratio, 1)
+    return {"radius_m": NEAR_M, "busyness": level, "change_vs_usual_pct": change, "based_on": len(w), "spots": near,
+            "nearest_m": st[0]["distance_m"] if st else None}
+
+
+def by_district(d):
+    """{district_id: footfall of its WiFi spots on the latest common day, vs their 7-day average}."""
+    ov = overview(d)
+    latest = (ov["city"] or {}).get("date")
+    groups = defaultdict(list)
+    for s in ov["stations"]:
+        if s.get("date") == latest and s.get("visits"):
+            groups[ckan.as_int(s.get("district_id"))].append(s)
+    out = {}
+    for did, ss in groups.items():
+        avg = sum(s["visits_7d_avg"] for s in ss if s.get("visits_7d_avg"))
+        change, level = _busyness(sum(s["visits"] for s in ss if s.get("visits_7d_avg")), avg)
+        out[did] = {"date": latest, "spots": len(ss), "visits": sum(s["visits"] for s in ss),
+                    "visitors": sum(s.get("visitors") or 0 for s in ss), "change_vs_7d_pct": change, "busyness": level,
+                    "busiest_spot": max(ss, key=lambda s: s["visits"])["station_id"]}
+    return out
 
 
 def nearest(d, lat, lon, k):

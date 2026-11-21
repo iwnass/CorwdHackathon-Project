@@ -26,13 +26,16 @@ Times are given twice: `time` (UTC, `Z`) and `time_local` (Athens).
 | `GET /api/air` | `city` now (`pollution_pct_avg`, `pollution_level`, `pollution_pct_max`, `worst` 5 station ids, `suspect` ids), every station's `pollution_pct` / `pollution_level` / `main_pollutant`, `hourly` city curve for the last 24 h. Individual pollutants only inside `details` |
 | `GET /api/heat` | `city` now (temperature, humidity, `feels_like`, `heat_level`, `hottest`/`coolest`, `peak_hour_24h`, `low_hour_24h`), every station with `min_24h`/`max_24h`, `hourly` city curve (avg/min/max) |
 | `GET /api/air?station_id=102` (same on `/api/heat`) | one station, hourly air **and** heat for the last 24 h |
-| **`GET /api/here?lat=&lon=[&k=3]`** | **for the live map, one call per position:** `location` (`neighbourhood`, `district_id`, `match`: `inside` / `nearest` within 1.5 km of a border / `outside` Athens), the user's `zone` (air + heat with 24 h curves), `nearest_stations` (air + heat, `distance_m`, faulty sensors skipped), `nearest_wifi` (footfall), `city` context. `Cache-Control: private, no-store` |
-| `GET /api/zones` | every **zone = municipal district** (the city's 7 Δημοτικά Διαμερίσματα): name, centre point, neighbourhoods, and an `air` block (`pollution_pct_avg`, `pollution_level`, `pollution_pct_max`, `worst`, `hourly`; pollutants in `details`) and a `heat` block (`temperature_avg/min/max`, `feels_like_avg`, `heat_level`, `hottest`/`coolest`, peak/low hour, `hourly`). Sorted worst air first; `ranking.worst_air` and `ranking.hottest` give both orders |
+| **`GET /api/here?lat=&lon=[&k=3]`** | **for the live map, one call per position:** `location` (`neighbourhood`, `district_id`, `match`: `inside` / `nearest` within 1.5 km of a border / `outside` Athens), the user's `zone` (air + heat with 24 h curves), `nearest_stations` (air + heat, `distance_m`, faulty sensors skipped), `footfall` (WiFi spots within 1 km + one `busyness` index for the area vs usual, see below), `cooling` (nearest fountain, pocket park, pool), `places_nearby` (within 1 km), `accessible_parking` (nearest within 2 km), `events_nearby` (next show of each event within 2 km this week), `city` context. `Cache-Control: private, no-store` |
+| `GET /api/zones` | every **zone = municipal district** (the city's 7 Δημοτικά Διαμερίσματα): name, centre point, neighbourhoods, and an `air` block (`pollution_pct_avg`, `pollution_level`, `pollution_pct_max`, `worst`, `hourly`; pollutants in `details`) and a `heat` block (`temperature_avg/min/max`, `feels_like_avg`, `heat_level`, `hottest`/`coolest`, peak/low hour, `hourly`). Sorted worst air first; `ranking.worst_air` and `ranking.hottest` give both orders. Each zone also has `footfall`: visits/visitors of its WiFi spots on the latest day, `busyness` vs their 7-day average, `busiest_spot` |
 | `GET /api/zones?district_id=6` | one zone with all its stations, each with both air and heat |
-| `GET /api/traffic` | footfall per WiFi station for the latest day, vs. its own previous-7-day average (`busyness`: `quiet` / `usual` / `busy`), `daily` city totals for 14 days |
+| `GET /api/traffic` | footfall per WiFi station for the latest day, vs. its own previous-7-day average (`busyness`: `quiet` / `usual` / `busy`), plus from its last 8 weeks: `usual_for_weekday` (a normal day like this one), `busiest_weekday`, `trend_7d_vs_28d_pct`; `daily` city totals for 14 days |
 | `GET /api/traffic?station_id=113&days=30` | one WiFi station, daily series (`days` 1–90, default 30) |
-| `GET /api/events[?days=30][&category=Music][&limit=50]` | upcoming concerts and events in Athens from **Ticketmaster**, soonest first: name, date/time, `category` (Music, Sports, Arts & Theatre), `genre`, `status` (`onsale`/`offsale`), venue with coordinates **and its `neighbourhood` + `district_id`**, image, ticket `url`. Same answer for every user (no position in the URL) → served from the CDN cache. `503` until `TICKETMASTER_API_KEY` is set |
-| `GET /api/stations` | every environmental and WiFi station with coordinates — for the map |
+| `GET /api/events[?days=30 or when=today/weekend/week][&category=Music][&limit=50]` | upcoming concerts and events in Athens from **Ticketmaster**, soonest first: name, date/time, `category` (Music, Sports, Arts & Theatre), `genre`, `status` (`onsale`/`offsale`), venue with coordinates **and its `neighbourhood` + `district_id`**, image, ticket `url`. Same answer for every user (no position in the URL) → served from the CDN cache. `503` until `TICKETMASTER_API_KEY` is set |
+| **`POST /api/assistant`** `{"text", "conversation_id"?, "lat"?, "lon"?, "engine"?: "llm"}` | **chat assistant.** City-service questions (appointments, KEP, reports, fines, the 570 municipal services…) go to the City of Athens **AthensGov Sandbox** bot; air, heat and "where can I cool down" are answered from our data. Reply: `text` (markdown), `speech` (for TTS), `suggestions` (quick replies), `cards` (with `lat`/`lng` for the map), `source` (`athensgov` / `athens-pulse`), `conversation_id` (send it back with the next message), `truncated` (message was cut to the bot's 2000-char limit). `503` until `ATHENSGOV_SANDBOX_KEY` is set, `429` when the shared key's per-minute limit is reached. Note: the sandbox's events/POIs are fictional; only its services registry is real |
+| **`GET /api/places[?kind=museum,metro_station]`** | **places for visitors** (city GIS, ~450): museums, galleries, theatres, libraries, cultural centres, cinema (`kind` per venue type), 302 named places/squares, metro/tram/rail stations (`lines`: `M1`…`T5`), free WiFi4EU spots, accessible parking, drinking fountains, pocket parks, pools. Each: `name` (Greek), `name_en` (the city's English name, else a Latin transliteration), `address`, `lat`/`lon`. CDN-cached |
+| **`GET /api/i18n?lang=de`** | labels for every code the API returns (place kinds, crowd/air/heat levels, event categories, `onsale`/`offsale`, `today`/`weekend`/`week`) in **en, el, de, fr, es, ru, zh, ja, ar**; `dir` = `rtl` for Arabic. Load once, translate in the app |
+| `GET /api/stations` | every environmental and WiFi station with coordinates, plus `cooling`: active drinking fountains, pocket parks and public pools (city GIS) — for the map |
 | `GET /api/health` | liveness + what this instance has cached; never calls the city API |
 
 Errors: `400` bad parameter, `404` unknown station, `502` city API unreachable **and** nothing cached yet.
@@ -50,6 +53,12 @@ Cached in memory per instance: air/heat 10 min, footfall 30 min. If a refresh fa
 `"stale": true` instead of an error. The CDN may also keep a response for 5 min (`s-maxage=300`).
 
 ## Things a frontend should know
+
+- **For visitors, in any of 9 languages:** the API returns stable codes; translate them with `/api/i18n?lang=…`.
+  Place names come in Greek (`name`) and English (`name_en`); show `name_en` for every language except Greek.
+  Event titles are shown as Ticketmaster publishes them (no machine translation). Arabic: render right-to-left.
+- **The city GIS (places, cool-down spots) is slow at times** (5–15 s per layer). Layers load in parallel and are
+  cached for 24 h; if a refresh fails the last good copy is served, and `/api/here` still answers without them.
 
 - **Live tracking flow.** Tracking runs on the device; the server is stateless and never stores positions or trails.
   1. On start: `/api/zones` (zone layer), `/api/stations` (markers), `/api/here` (full panel with 24 h curves).
@@ -74,7 +83,13 @@ Cached in memory per instance: air/heat 10 min, footfall 30 min. If a refresh fa
   are still returned with their distance.
 
 - **"Traffic" is people, not cars.** The city publishes no vehicle-traffic data. `visits` = WiFi connections that day,
-  `visitors` = distinct people, `peak_visitors` = highest simultaneous count. Updated once a day (yesterday's numbers).
+  `visitors` = distinct people, `peak_visitors` = highest simultaneous count. Updated once a day (yesterday's numbers);
+  there is no hourly data, so "how busy is it right now" is not possible. A day with 0 visits is a WiFi outage
+  (~5 % of days) and is treated as missing, not as an empty square.
+- **Footfall at a point** (`/api/here` → `footfall`): each spot within 1 km is compared with its own 7-day average,
+  and those ratios are averaged with weight 1/d² (closer spots count more; raw counts are not averaged, or one big
+  square would swamp the rest). `based_on` says how many spots; with 0 the area has no WiFi spot nearby
+  (`nearest_m` says how far the closest is) — show "no data" rather than "quiet".
 - **Coordinates are neighbourhood centres**, not exact sensor positions — several stations share a point.
 - **Air pollution is one percentage per sensor: `pollution_pct` (0–100).** It follows the European Air Quality
   Index, the same scale as the city's own rating: each pollutant (PM2.5, PM10, NO₂, O₃, SO₂) is placed on the
@@ -104,6 +119,8 @@ Cached in memory per instance: air/heat 10 min, footfall 30 min. If a refresh fa
 | `ATHENS_HTTP_TIMEOUT_S` | `15` | per request to the city |
 
 | `TICKETMASTER_API_KEY` | — | **needed for `/api/events` only**: free Consumer Key from developer.ticketmaster.com. Set it in Vercel → Settings → Environment Variables (locally: `export` it, see `.env.example`). Server-side only |
+| `ATHENSGOV_SANDBOX_KEY` | — | **needed for `/api/assistant` (city services) only**: the sandbox API key. Server-side only |
+| `ATHENSGOV_REQUESTS_PER_MIN` | `100` | the key's limit, shared by all users; the backend answers `429` instead of exceeding it (per instance) |
 | `TICKETMASTER_RADIUS_KM` | `25` | events within this radius of central Athens |
 | `TICKETMASTER_TTL_S` | `1800` | events cache |
 

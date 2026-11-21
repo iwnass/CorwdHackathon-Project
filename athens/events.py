@@ -7,10 +7,11 @@ import json
 import os
 import urllib.error
 import urllib.parse
-from datetime import timedelta
+from datetime import date, timedelta
 
 from . import cache, ckan
-from .times import iso_utc, now_utc, parse_utc
+from .geo import haversine
+from .times import iso_local, iso_utc, now_utc, parse_utc
 
 BASE = os.environ.get("TICKETMASTER_BASE", "https://app.ticketmaster.com/discovery/v2")
 CENTER = (37.9838, 23.7275)  # Athens
@@ -104,11 +105,28 @@ def data():
     return cache.cached("events", TTL_S, load)
 
 
-def upcoming(d, days=30, category=None, limit=50):
-    """Events in the next `days`, soonest first. The same for every user, so it can be cached by the CDN."""
+WHEN = ("today", "weekend", "week")
+
+
+def when_range(when, today=None):
+    """Athens-local dates (first, last) for today / this weekend / the next 7 days."""
+    today = today or date.fromisoformat(iso_local(now_utc())[:10])
+    if when == "today":
+        return today, today
+    if when == "weekend":  # on Saturday or Sunday: the rest of this weekend
+        sat = today + timedelta(days=(5 - today.weekday()) % 7) if today.weekday() < 5 else today
+        return sat, sat + timedelta(days=6 - sat.weekday())
+    return today, today + timedelta(days=6)
+
+
+def upcoming(d, days=30, category=None, limit=50, when=None):
+    """Events in the next `days` (or `when`), soonest first. The same for every user, so it can be cached by the CDN."""
     until = now_utc() + timedelta(days=days)
+    first, last = when_range(when) if when else (None, None)
     out = []
     for e in d["events"]:
+        if when and not (e["date"] and first.isoformat() <= e["date"] <= last.isoformat()):
+            continue
         try:
             if e["start"] and parse_utc(e["start"]) > until:
                 continue
@@ -119,3 +137,18 @@ def upcoming(d, days=30, category=None, limit=50):
         out.append(dict(e, venue=dict(e["venue"])))
     return {"count": len(out), "categories": sorted({e["category"] for e in d["events"] if e["category"]}),
             "events": out[:limit]}
+
+
+def nearby(d, lat, lon, radius_m=2000, k=5, days=7):
+    """The next show of each event within radius_m in the next `days`, soonest first, with distance_m."""
+    seen, out = set(), []
+    for e in upcoming(d, days=days, limit=10 ** 6)["events"]:
+        v = e["venue"]
+        key = (e["name"], v["name"])  # theatres list the same play many times
+        if v["lat"] is None or key in seen:
+            continue
+        dist = haversine(lat, lon, v["lat"], v["lon"])
+        if dist <= radius_m:
+            seen.add(key)
+            out.append({**e, "distance_m": round(dist)})
+    return out[:k]

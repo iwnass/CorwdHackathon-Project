@@ -1,4 +1,4 @@
-# GET /api/events[?days=30][&category=Music][&limit=50]
+# GET /api/events[?days=30|when=today|weekend|week][&category=Music][&limit=50]
 #   → upcoming concerts and events in Athens (Ticketmaster), soonest first. Each venue carries its
 #     neighbourhood and district_id, so the app groups events by the user's location (from /api/track) itself:
 #     the URL holds no position, every user gets the same CDN-cached answer. 503 if TICKETMASTER_API_KEY is unset.
@@ -13,11 +13,14 @@ from athens.http import HttpError, int_param, make_handler, with_meta  # noqa: E
 def get(q):
     days = int_param(q, "days", 30, 1, events.HORIZON_DAYS)
     limit = int_param(q, "limit", 50, 1, 200)
+    when = q.get("when")
+    if when is not None and when not in events.WHEN:
+        raise HttpError(400, f"when must be one of {', '.join(events.WHEN)}")
     try:
         d, meta = events.data()
     except events.NotConfigured as e:
         raise HttpError(503, f"events unavailable: {e}")
-    body = with_meta(events.upcoming(d, days, q.get("category"), limit), meta)
+    body = with_meta(events.upcoming(d, days, q.get("category"), limit, when), meta)
     body["meta"]["source"] = "Ticketmaster Discovery API"
     try:
         city, _ = env.data()

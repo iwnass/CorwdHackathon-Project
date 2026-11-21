@@ -10,7 +10,8 @@ from urllib.parse import parse_qs, urlparse
 
 from .times import iso_utc
 
-ROUTES = {}  # path → fn(query) ; used by scripts/serve.py
+ROUTES = {}  # path → (fn, cache, method); used by scripts/serve.py
+MAX_BODY = 16 * 1024
 CACHE_CONTROL = "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
 
 
@@ -84,12 +85,46 @@ def run(fn, path):
         return 502, {"error": f"upstream unavailable: {type(e).__name__}"}
 
 
-def make_handler(route, fn, cache=CACHE_CONTROL):
-    ROUTES[route] = (fn, cache)
+def read_json(handler):
+    """The request body as a JSON object; 413/400 on oversize or bad JSON."""
+    try:
+        n = int(handler.headers.get("Content-Length") or 0)
+    except ValueError:
+        raise HttpError(400, "bad Content-Length")
+    if n > MAX_BODY:
+        raise HttpError(413, f"body larger than {MAX_BODY} bytes")
+    try:
+        body = json.loads(handler.rfile.read(n) or b"{}")
+    except ValueError:
+        raise HttpError(400, "body must be JSON")
+    if not isinstance(body, dict):
+        raise HttpError(400, "body must be a JSON object")
+    return body
+
+
+def preflight(handler):
+    """CORS preflight: browsers send it before a cross-origin JSON POST."""
+    handler.send_response(204)
+    handler.send_header("Access-Control-Allow-Origin", "*")
+    handler.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+    handler.send_header("Access-Control-Allow-Headers", "Content-Type")
+    handler.send_header("Access-Control-Max-Age", "86400")
+    handler.end_headers()
+
+
+def make_handler(route, fn, cache=CACHE_CONTROL, method="GET"):
+    """GET: fn(query). POST: fn(query, json_body)."""
+    ROUTES[route] = (fn, cache, method)
 
     class handler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            status, body = run(fn, self.path)
-            respond(self, status, body, cache)
+        if method == "POST":
+            def do_POST(self):
+                respond(self, *run(lambda q: fn(q, read_json(self)), self.path), cache)
+
+            def do_OPTIONS(self):
+                preflight(self)
+        else:
+            def do_GET(self):
+                respond(self, *run(fn, self.path), cache)
 
     return handler

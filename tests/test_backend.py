@@ -370,6 +370,35 @@ class Traffic(unittest.TestCase):
         d["days"][2]["2026-11-21"] = {"visits": 5}  # 1 of 3 stations so far on the 21st
         self.assertEqual(traffic.overview(d)["city"]["date"], "2026-11-20")
 
+    def test_outage_days_are_not_quiet_days(self):
+        rows = [{"station_id": 1, "date": "2026-11-21", "cumulative_traffic": 0}]
+        self.assertEqual(traffic._merge({"visits": rows}), {})  # a 0 is dropped, not stored as "0 visits"
+
+    def test_patterns(self):
+        from datetime import date as D, timedelta as T
+        last = D(2026, 11, 20)  # a Friday
+        days = {}
+        for i in range(56):
+            x = last - T(days=i)
+            days[x.isoformat()] = {"visits": 3000 if x.weekday() == 5 else (500 if i < 7 else 1000)}  # Saturdays busiest
+        p = traffic._patterns(days, last.isoformat())
+        self.assertEqual(p["busiest_weekday"], "Sat")
+        self.assertEqual(p["usual_for_weekday"], 1000)            # previous Fridays
+        self.assertLess(p["trend_7d_vs_28d_pct"], 0)              # the last week was quieter
+
+    def test_at_point_and_by_district(self):
+        d = traffic.load(self.get)
+        d["stations"][2].update(lat=37.99, lon=23.73)              # both spots at the same place now
+        near = traffic.at_point(d, 37.991, 23.731)                 # ~140 m away
+        self.assertEqual([s["station_id"] for s in near["spots"]], [1, 2])
+        # station 1 at 2× its usual, station 2 at 1×, same distance → 1.5× → busy (+50 %)
+        self.assertEqual((near["busyness"], near["change_vs_usual_pct"], near["based_on"]), ("busy", 50.0, 2))
+        far = traffic.at_point(d, 38.10, 23.90)
+        self.assertEqual((far["spots"], far["busyness"]), ([], None))
+        self.assertGreater(far["nearest_m"], 1000)
+        z = traffic.by_district(d)
+        self.assertEqual((z[1]["spots"], z[1]["visits"], z[1]["busyness"], z[1]["busiest_spot"]), (1, 2000, "busy", 1))
+
     def test_history(self):
         d = traffic.load(self.get)
         body, _ = traffic.history(d, 1, 3, self.get)
@@ -472,6 +501,190 @@ class Events(unittest.TestCase):
         self.assertNotIn("secret", log.getvalue())  # not in the server log either
 
 
+class Cooling(unittest.TestCase):
+    def test_load_and_nearest(self):
+        from athens import cooling
+        layers = {
+            "geonode:pidakes": [{"geometry": {"type": "MultiPoint", "coordinates": [[23.7408, 37.9770]]},
+                                 "properties": {"name": "Πλ.Κολωνακίου", "address": "Κολωνάκι", "status": "ΕΝΕΡΓΟ"}},
+                                {"geometry": {"type": "MultiPoint", "coordinates": [[23.7350, 37.9755]]},
+                                 "properties": {"name": "closed", "status": "ΑΝΕΝΕΡΓΟ"}},
+                                {"geometry": None, "properties": {"name": "no location"}}],
+            "geonode:PocketParks2": [{"geometry": {"type": "Point", "coordinates": [23.7353, 37.9603]},
+                                      "properties": {"descr": "ΠΑΡΚΟ ΤΣΕΠΗΣ", "streetname": "ΑΕΤΙΩΝΟΣ"}}],
+            "geonode:kolimbitiria": []}
+
+        def get(url):
+            self.assertIn("srsName=EPSG:4326", url)
+            return json.dumps({"features": layers[parse_qs(urlparse(url).query)["typename"][0]]}).encode()
+        spots = cooling.load(get)
+        self.assertEqual([(s["kind"], s["name"]) for s in spots], [("fountain", "Πλ.Κολωνακίου"), ("pocket_park", "ΠΑΡΚΟ ΤΣΕΠΗΣ")])
+        near = cooling.nearest(spots, 37.9755, 23.7348)  # Syntagma: the closed fountain right there is skipped
+        self.assertEqual(sorted(near), ["fountain", "pocket_park"])
+        self.assertAlmostEqual(near["fountain"]["distance_m"], 550, delta=50)
+
+
+class Assistant(unittest.TestCase):
+    KEY = {"ATHENSGOV_SANDBOX_KEY": "sbx-secret-1"}
+
+    def setUp(self):
+        from athens import assistant
+        self.a = assistant
+        assistant._bucket.update(tokens=float(assistant.RATE_PER_MIN))
+
+    def fake_city(self, expired=()):
+        calls = []
+
+        def request(method, url, headers, body=None):
+            calls.append((method, url, headers, json.loads(body) if body else None))
+            self.assertEqual(headers["X-API-Key"], "sbx-secret-1")
+            if url.endswith("/v1/conversations"):
+                return {"id": f"c{len(calls)}"}
+            conv = url.split("/v1/conversations/")[1].split("/")[0]
+            if conv in expired:
+                import urllib.error
+                raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+            return {"text": "Βρήκα 3 ΚΕΠ", "speech": "Βρήκα 3 ΚΕΠ", "intent": {"name": "find_kep", "confidence": 1.0},
+                    "cards": [], "suggestions": [], "state": {"flow": None}}
+        request.calls = calls
+        return request
+
+    def test_topics(self):
+        t = self.a.topic
+        self.assertEqual([t("Πώς είναι ο αέρας;"), t("ΖΈΣΤΗ σήμερα!"), t("kanei zesti?"), t("air quality near me")],
+                         ["air", "heat", "heat", "air"])
+        self.assertEqual(t("κάνει ζέστη, πού να δροσιστώ;"), "cooling")  # cooling wins
+        self.assertIsNone(t("Θέλω ραντεβού για πιστοποιητικό γέννησης"))  # → city bot
+
+    def test_forward_cap_and_reuse(self):
+        req = self.fake_city()
+        with mock.patch.dict(os.environ, self.KEY):
+            r = self.a.ask("  pou einai   to kontinotero KEP? " + "x" * 3000, lat=37.97551234, lon=23.73481234,
+                           engine="llm", request=req)
+            self.assertEqual((r["source"], r["conversation_id"], r["truncated"]), ("athensgov", "c1", True))
+            _, url, _, body = req.calls[1]
+            self.assertTrue(url.endswith("/v1/conversations/c1/messages"))
+            self.assertEqual(len(body["text"]), 2000)                 # never more than the city bot accepts
+            self.assertTrue(body["text"].startswith("pou einai to kontinotero KEP?"))  # whitespace collapsed
+            self.assertEqual((body["location"], body["engine"]), ({"lat": 37.976, "lng": 23.735}, "llm"))
+            r2 = self.a.ask("και αύριο;", conversation_id="c1", request=req)  # same conversation, no new one
+            self.assertEqual((r2["conversation_id"], len(req.calls)), ("c1", 3))
+
+    def test_expired_conversation_restarts(self):
+        req = self.fake_city(expired=("old",))
+        with mock.patch.dict(os.environ, self.KEY):
+            r = self.a.ask("ΚΕΠ", conversation_id="old", request=req)
+        self.assertEqual(r["conversation_id"], "c2")
+
+    def test_rate_limit(self):
+        req = self.fake_city()
+        self.a._bucket.update(tokens=2.0, at=__import__("time").monotonic())
+        with mock.patch.dict(os.environ, self.KEY):
+            self.a.ask("ΚΕΠ", request=req)                             # 2 calls: new conversation + message
+            with self.assertRaises(self.a.AthensGovError) as e:
+                self.a.ask("ΚΕΠ", conversation_id="c1", request=req)
+        self.assertEqual(e.exception.status, 429)
+        self.assertIn("retry in", str(e.exception))
+
+    def test_local_answers(self):
+        r = self.a.ask("πώς είναι ο αέρας;")                         # no location, no key needed
+        self.assertEqual((r["source"], r["state"]["awaiting"]), ("athens-pulse", "location"))
+        here = {"zone": {"air": {"pollution_pct_avg": 29}},
+                "nearest_stations": [{"name": "Πλ. Συντάγματος", "distance_m": 6, "pollution_pct": 36,
+                                      "pollution_level": "Moderate", "temperature": 22.1, "feels_like": 22.1,
+                                      "heat_level": "none", "lat": 37.975, "lon": 23.735, "station_id": 161}]}
+        with mock.patch.object(env, "data", return_value=({}, None)), mock.patch.object(env, "here", return_value=here):
+            air = self.a.ask("πώς είναι ο αέρας;", lat=37.975, lon=23.735)
+            heat = self.a.ask("is it hot?", lat=37.975, lon=23.735)
+        self.assertIn("36%", air["text"]); self.assertIn("Μέτρια", air["text"]); self.assertIn("29%", air["text"])
+        self.assertIn("22.1 °C", heat["text"]); self.assertEqual(heat["intent"]["name"], "heat")
+        self.assertNotIn("**", air["speech"])                         # speech is plain text for TTS
+
+    def test_endpoint_validation_and_key_safety(self):
+        spec = importlib.util.spec_from_file_location("t_assistant", os.path.join(ROOT, "api", "assistant.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        call = lambda body: run(lambda q: mod.get(q, body), "/api/assistant")  # noqa: E731
+        self.assertEqual(call({})[0], 400)
+        self.assertEqual(call({"text": "ΚΕΠ", "conversation_id": "../../admin"})[0], 400)
+        self.assertEqual(call({"text": "ΚΕΠ", "lat": 999, "lon": 1})[0], 400)
+        with mock.patch.dict(os.environ, {"ATHENSGOV_SANDBOX_KEY": ""}):
+            status, body = call({"text": "ΚΕΠ"})
+        self.assertEqual(status, 503)
+        self.assertIn("ATHENSGOV_SANDBOX_KEY", body["error"])
+
+        def down(method, url, headers, body=None):
+            raise OSError(f"failed {url} {headers}")  # would leak the key if it reached the log
+        log = io.StringIO()
+        with mock.patch.dict(os.environ, self.KEY), mock.patch.object(self.a, "http", down), mock.patch("sys.stderr", log):
+            status, body = call({"text": "ΚΕΠ"})
+        self.assertEqual(status, 502)
+        self.assertNotIn("sbx-secret-1", log.getvalue() + json.dumps(body))
+        self.assertEqual(ROUTES["/api/assistant"][1:], ("private, no-store", "POST"))
+
+
+class Tourism(unittest.TestCase):
+    def test_i18n_all_languages(self):
+        from athens import i18n
+        self.assertEqual(len(i18n.LANGS), 9)
+        for code, row in i18n.LABELS.items():
+            self.assertTrue(all(row[l].strip() for l in i18n.LANGS), code)
+        de, ar, xx = i18n.labels("de"), i18n.labels("ar"), i18n.labels("klingon")
+        self.assertEqual((de["labels"]["museum"], de["dir"]), ("Museum", "ltr"))
+        self.assertEqual((ar["labels"]["metro_station"], ar["dir"]), ("محطة مترو", "rtl"))
+        self.assertEqual(xx["lang"], "en")  # unknown language → English
+
+    def test_transliterate(self):
+        from athens.places import transliterate
+        self.assertEqual(transliterate("Μουσείο Λαϊκής Τέχνης"), "Mouseio Laikis Technis")
+        self.assertEqual(transliterate("Ντόρα Στράτου"), "Dora Stratou")
+        self.assertIsNone(transliterate(""))
+        self.assertEqual(transliterate("Πλ.Συντάγματος(κεντρικό)"), "Pl.Syntagmatos(Kentriko)")
+
+    def test_places_load(self):
+        from athens import places
+        pt = lambda lon, lat, multi=False: {"type": "MultiPoint" if multi else "Point",  # noqa: E731
+                                            "coordinates": [[lon, lat]] if multi else [lon, lat]}
+        layers = {
+            "geonode:politismos24_f": [{"geometry": pt(23.72, 37.97, True), "properties": {"type": "ΜΟΥΣΕΙΟ",
+                                        "name": "Μουσείο, Λαϊκής Τέχνης - και Παράδοσης", "tax_diefth": "Αγγ. Χατζημιχάλη 6",
+                                        "link_": "http://x"}}],
+            "geonode:toponymia": [{"geometry": pt(23.71, 37.99), "properties": {"names_labe": "ΠΛΑΤΕΙΑ ΑΓ.ΤΡΥΦΩΝΟΣ",
+                                   "names_eng": "AGIOU TRYFONOS SQ.", "synoikia": "ΑΚΑΔΗΜΙΑ ΠΛΑΤΩΝΟΣ"}}],
+            "geonode:stasy2024": [{"geometry": pt(23.73, 37.98, True), "properties": {"name": "ΟΜΟΝΟΙΑ", "name_en": "Omonia",
+                                   "lines": "Γραμμή 1&2-ΜΕΤΡΟ", "eidos": "ΜΕΤΡΟ"}},
+                                  {"geometry": pt(23.73, 37.97, True), "properties": {"name": "ΣΥΝΤΑΓΜΑ", "name_en": "Syntagma",
+                                   "lines": "Γραμμή 5-ΤΡΑΜ", "eidos": "ΤΡΑΜ"}}],
+            "geonode:wifi4eu": [{"geometry": pt(23.735, 37.9755), "properties": {"descr": "Πλατεία Συντάγματος"}}],
+            "geonode:parking_amea": [{"geometry": None, "properties": {"street": "ΜΟΥΡΟΥΖΗ", "number": "1"}}]}  # no point → skipped
+        with mock.patch("athens.cooling.layer", lambda name, get: layers[name]):
+            ps = places.load(None)
+        by = {p["kind"]: p for p in ps}
+        self.assertEqual(sorted(by), ["free_wifi", "metro_station", "museum", "place", "tram_stop"])
+        self.assertEqual(by["museum"]["name"], "Μουσείο, Λαϊκής Τέχνης και Παράδοσης")  # the city's " - " line breaks removed
+        self.assertTrue(by["museum"]["name_en"].startswith("Mouseio"))                # no English name → transliterated
+        self.assertEqual((by["place"]["name_en"], by["metro_station"]["lines"], by["tram_stop"]["lines"]),
+                         ("Agiou Tryfonos Sq.", ["M1", "M2"], ["T5"]))
+        near = places.near(ps, 37.9755, 23.735, 500)
+        self.assertEqual(near[0]["kind"], "free_wifi")
+        self.assertEqual(near[0]["distance_m"], 0)
+
+    def test_when_range(self):
+        from datetime import date as D
+        fri, sat, sun = D(2026, 11, 20), D(2026, 11, 21), D(2026, 11, 22)
+        self.assertEqual(events.when_range("today", fri), (fri, fri))
+        self.assertEqual(events.when_range("weekend", fri), (sat, sun))
+        self.assertEqual(events.when_range("weekend", sat), (sat, sun))
+        self.assertEqual(events.when_range("weekend", sun), (sun, sun))
+        self.assertEqual(events.when_range("week", fri), (fri, D(2026, 11, 26)))
+
+    def test_events_nearby_one_entry_per_show(self):
+        d = {"events": [events._normalize(tm_event(1, 1)), events._normalize(tm_event(2, 2, name="Event 1")),  # same show
+                        events._normalize(tm_event(3, 3, lat=38.2))]}                                         # 25 km away
+        near = events.nearby(d, 37.978, 23.712)
+        self.assertEqual([(e["id"], e["distance_m"]) for e in near], [("e1", 0)])
+
+
 class Http(unittest.TestCase):
     def test_int_param(self):
         self.assertEqual(int_param({"days": "7"}, "days", 30, 1, 90), 7)
@@ -522,7 +735,7 @@ class Http(unittest.TestCase):
             self.assertTrue(hasattr(mod, "handler"), f)
         self.assertEqual(ROUTES["/api/here"][1], "private, no-store")  # personal location: never cached
         self.assertEqual(ROUTES["/api/track"][1], "private, no-store")
-        self.assertEqual(sorted(ROUTES), ["/api/air", "/api/config", "/api/events", "/api/health", "/api/heat", "/api/here", "/api/stations", "/api/track", "/api/traffic", "/api/zones"])
+        self.assertEqual(sorted(ROUTES), ["/api/air", "/api/assistant", "/api/config", "/api/events", "/api/health", "/api/heat", "/api/here", "/api/i18n", "/api/places", "/api/stations", "/api/track", "/api/traffic", "/api/zones"])
 
 
 if __name__ == "__main__":
