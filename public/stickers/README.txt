@@ -1,0 +1,1 @@
+Drop transparent PNG stickers here (parthenon.png, owl.png, amphora.png, column.png, lycabettus.png, tram.png, word.png, wreath.png, helmet.png, meander.png, coffee.png, stadium.png, cat.png). Missing files fall back to the drawn SVG versions.
