@@ -1,6 +1,8 @@
 """Shared plumbing for the Vercel Python handlers (BaseHTTPRequestHandler) and the local server."""
+import importlib.util
 import json
 import math
+import os
 import sys
 import time
 import traceback
@@ -134,3 +136,35 @@ def make_handler(route, fn, cache=CACHE_CONTROL, method="GET"):
                 respond(self, *run(fn, self.path), cache)
 
     return handler
+
+
+def load_endpoints(directory):
+    """Imports every endpoint module in `directory`; each registers its route into ROUTES via make_handler."""
+    for f in sorted(os.listdir(directory)):
+        if f.endswith(".py"):
+            spec = importlib.util.spec_from_file_location(f"endpoint_{f[:-3]}", os.path.join(directory, f))
+            spec.loader.exec_module(importlib.util.module_from_spec(spec))
+
+
+class Dispatch(BaseHTTPRequestHandler):
+    """Every registered route in one handler, looked up by path (one Vercel Function, and the local server)."""
+
+    def route(self, method):
+        r = ROUTES.get(urlparse(self.path).path.rstrip("/"))
+        if r is None or r[2] != method:
+            respond(self, 404 if r is None else 405, {"error": "not found", "routes": sorted(ROUTES)})
+            return None
+        return r
+
+    def do_GET(self):
+        r = self.route("GET")
+        if r:
+            respond(self, *run(r[0], self.path), r[1])
+
+    def do_POST(self):
+        r = self.route("POST")
+        if r:
+            respond(self, *run(lambda q: r[0](q, read_json(self), client_ip(self)), self.path), r[1])
+
+    def do_OPTIONS(self):
+        preflight(self)

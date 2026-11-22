@@ -1,0 +1,3 @@
+# The backend (api/*.py, athens/*.py) uses only the Python standard library — no third-party
+# packages needed. This file's presence is what makes Vercel build api/*.py as Python
+# Serverless Functions at all; without it they're treated as static files.
