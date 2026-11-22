@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useTheme } from '../../context/ThemeContext'
 import { useLang } from '../../i18n/LanguageContext'
 import { THEME_COLORS } from '../../utils/themes'
-import { CheckIcon, CloseIcon, ContrastIcon, GlobeIcon, PaletteIcon, SettingsIcon } from '../ui/Icons'
+import { CheckIcon, CloseIcon, ContrastIcon, GlobeIcon, PaletteIcon, SettingsIcon, SunIcon } from '../ui/Icons'
 import { DonateButton } from './Sidebar'
 
 /**
@@ -11,7 +11,7 @@ import { DonateButton } from './Sidebar'
  * Phones: slides up from the bottom. Tablet/desktop: slides in from the side.
  */
 export default function SettingsPanel() {
-  const { settingsOpen, setSettingsOpen, isDark, setIsDark, color, setColor, palette } = useTheme()
+  const { settingsOpen, setSettingsOpen, isDark, setIsDark, color, setColor, palette, showHeatmap, setShowHeatmap } = useTheme()
   const { t, lang, setLang, languages } = useLang()
   const close = () => setSettingsOpen(false)
 
@@ -105,6 +105,23 @@ export default function SettingsPanel() {
                 </button>
               ))}
             </div>
+          </Section>
+
+          {/* Heatmap on the map */}
+          <Section icon={SunIcon} title={t('settings.heatmap')}>
+            <button
+              onClick={() => setShowHeatmap(!showHeatmap)}
+              role="switch"
+              aria-checked={showHeatmap}
+              aria-label={t('settings.heatmap')}
+              className="relative h-6 w-12 shrink-0 rounded-full bg-primary-lighter transition dark:bg-primary-darker"
+            >
+              <span
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all dark:bg-primary ${
+                  showHeatmap ? 'left-6.5' : 'left-0.5'
+                }`}
+              />
+            </button>
           </Section>
 
           {/* Language */}

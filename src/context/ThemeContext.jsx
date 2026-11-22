@@ -25,6 +25,11 @@ export function ThemeProvider({ children }) {
     return THEME_COLORS[saved] ? saved : DEFAULT_COLOR
   })
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [showHeatmap, setShowHeatmap] = useState(() => read('showHeatmap', 'true') !== 'false')
+
+  useEffect(() => {
+    write('showHeatmap', String(showHeatmap))
+  }, [showHeatmap])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark)
@@ -52,8 +57,10 @@ export function ThemeProvider({ children }) {
       palette: THEME_COLORS[color], // hex values, used by the charts
       settingsOpen,
       setSettingsOpen,
+      showHeatmap,
+      setShowHeatmap,
     }),
-    [isDark, color, settingsOpen],
+    [isDark, color, settingsOpen, showHeatmap],
   )
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>

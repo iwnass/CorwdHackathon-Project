@@ -11,6 +11,27 @@ import { CloseIcon, CrosshairIcon, ExternalIcon, MapPinIcon } from './ui/Icons'
 const MT_LANG = { zh: Language.TRADITIONAL_CHINESE } // the app's other codes are MapTiler codes as they are
 const style = (dark) => (dark ? MapStyle.STREETS.DARK : MapStyle.STREETS)
 
+// The base style's own station icons/labels duplicate our chips/badges: hide them, keep the rail/road lines
+const BASE_TRANSIT_LAYER_RE = /rail|subway|metro|tram|station|transit/i
+function hideBaseTransitLayers(map) {
+  for (const layer of map.getStyle()?.layers ?? []) {
+    if (layer.type !== 'symbol') continue
+    const probe = `${layer.id} ${layer['source-layer'] ?? ''} ${JSON.stringify(layer.filter ?? '')}`
+    if (BASE_TRANSIT_LAYER_RE.test(probe)) {
+      try { map.setLayoutProperty(layer.id, 'visibility', 'none') } catch { /* layer not ready yet */ }
+    }
+  }
+}
+
+// A transit station: a line-coloured round badge (matches <LineBadge>) instead of a plain pin
+function badgeElement(p) {
+  const el = document.createElement('div')
+  el.className = 'map-badge'
+  el.style.background = p.color
+  el.textContent = p.badge
+  return el
+}
+
 /** Interactive MapTiler map: flies to `target`, draws a marker for every chip with lat/lng and for `focus`. */
 function TileMap({ target, zoom, chips, focus, user, userLabel, onLoad }) {
   const { lang } = useLang()
@@ -18,6 +39,7 @@ function TileMap({ target, zoom, chips, focus, user, userLabel, onLoad }) {
   const box = useRef(null)
   const map = useRef(null)
   const markers = useRef([])
+  const userMarker = useRef(null)
 
   useEffect(() => {
     mtConfig.apiKey = config.maptilerKey
@@ -26,6 +48,7 @@ function TileMap({ target, zoom, chips, focus, user, userLabel, onLoad }) {
       language: MT_LANG[lang] ?? lang, navigationControl: 'bottom-right', geolocateControl: false,
     })
     map.current.once('load', onLoad)
+    map.current.on('styledata', () => hideBaseTransitLayers(map.current)) // style reloads on theme/language change too
     return () => map.current.remove()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps -- created once; the effects below keep it in sync
 
@@ -39,17 +62,34 @@ function TileMap({ target, zoom, chips, focus, user, userLabel, onLoad }) {
   const points = [
     ...chips.filter((c) => c.lat != null),
     ...(focus ? [{ ...focus, color: '#e11d48' }] : []),
-    ...(user ? [{ id: 'me', ...user, color: '#dc2626', label: userLabel }] : []), // "you are here"
   ]
-  const pointsKey = points.map((p) => `${p.id}|${p.lat}|${p.lng}|${p.color}`).join()
+  const pointsKey = points.map((p) => `${p.id}|${p.lat}|${p.lng}|${p.color}|${p.badge ?? ''}`).join()
   useEffect(() => {
     markers.current.forEach((m) => m.remove())
     markers.current = points.map((p) => {
-      const m = new Marker({ color: p.color }).setLngLat([p.lng, p.lat]).addTo(map.current)
+      const m = p.badge
+        ? new Marker({ element: badgeElement(p) }).setLngLat([p.lng, p.lat]).addTo(map.current)
+        : new Marker({ color: p.color }).setLngLat([p.lng, p.lat]).addTo(map.current)
       m.getElement().title = p.label ?? ''
       return m
     })
   }, [pointsKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "you are here": an Apple Find My-style pulsing dot instead of a pin.
+  // Always remove-then-recreate (like the chip markers above) instead of an update-in-place:
+  // React's dev-mode double-mount destroys the first map instance, and a marker kept across
+  // that via a "create once, then just setLngLat" guard is left pointing at the dead map —
+  // it never lands on the map that's actually on screen until a full refresh.
+  useEffect(() => {
+    userMarker.current?.remove()
+    userMarker.current = null
+    if (!user) return
+    const el = document.createElement('div')
+    el.className = 'locate-dot'
+    el.innerHTML = '<span class="locate-dot__pulse"></span><span class="locate-dot__core"></span>'
+    el.title = userLabel ?? ''
+    userMarker.current = new Marker({ element: el, anchor: 'center' }).setLngLat([user.lng, user.lat]).addTo(map.current)
+  }, [user?.lat, user?.lng, userLabel]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return <div ref={box} className="h-full w-full" />
 }

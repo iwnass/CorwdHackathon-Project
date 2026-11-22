@@ -9,7 +9,7 @@ import DotGrid from '../reactbits/DotGrid'
 import { PageSkeleton } from '../ui/Skeleton'
 import BottomNav from './BottomNav'
 import Header from './Header'
-import { NAV_ITEMS } from './navItems'
+import { useNavItems } from './navItems'
 import SettingsPanel from './SettingsPanel'
 import Sidebar from './Sidebar'
 
@@ -37,7 +37,8 @@ import Sidebar from './Sidebar'
 const FROM_TAPPED_SIDE = true
 
 function usePageTurn(pathname, dir) {
-  const index = NAV_ITEMS.findIndex((i) => pathname.startsWith(i.to))
+  const items = useNavItems()
+  const index = items.findIndex((i) => pathname.startsWith(i.to))
   const last = useRef(index)
   const turn = useRef('')
   if (index !== last.current) {

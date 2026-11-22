@@ -14,6 +14,7 @@ import { config } from '../config'
 import { http } from './http'
 import { mock } from './mockData'
 import { TRANSIT_LINES } from './transitData'
+import { currentPosition } from '../hooks/useUserLocation'
 
 // Adapters: the backend's endpoints → the shapes in mockData.js. Fields the backend has no data for are null
 // (the pages hide them) — never invented.
@@ -41,6 +42,7 @@ const real = {
         lat: e.venue.lat,
         lng: e.venue.lon,
         type: e.category || e.genre || '',
+        category: e.category || null,
         pricePerPerson: e.price?.min ?? null,
         currency: e.price?.currency || 'EUR',
         popularity: null,
@@ -76,23 +78,31 @@ const real = {
       })
   },
 
-  // No hourly history exists: only the current hour, from live availability; other hours stay empty.
-  getEvUsage: async () => {
-    const stations = await real.getEvStations()
-    const online = stations.filter((s) => s.status !== 'offline')
-    const total = online.reduce((n, s) => n + s.total, 0)
-    const free = online.reduce((n, s) => n + s.available, 0)
-    const hour = new Date().getHours()
-    return Array.from({ length: 24 }, (_, h) => ({
-      hour: h,
-      occupancy: h === hour && total ? Math.round(100 * (1 - free / total)) : null,
-      typical: null,
-    }))
+  // GET /api/ev?history=1: our own 10-minute samples of live availability (the registry keeps no history)
+  getEvUsage: async () => (await http('/ev', { params: { history: 1 } })).history.map((r) => ({ time: r.time * 1000, occupancy: r.occupancy })),
+
+  // GET /api/metro?station=: next departures per line and direction (timetable estimates)
+  getDepartures: (stationId) => http('/metro', { params: { station: stationId } }),
+
+  // GET /api/places: museums, theatres, sights, free WiFi, accessible parking, fountains, pools… (city GIS)
+  getPlaces: async () => (await http('/places')).places.map((p) => ({ ...p, lng: p.lon })),
+
+  // GET /api/heat + /api/zones: today's hourly temperature for the city and each zone (municipal district)
+  getHeat: async () => {
+    const [heat, zones] = await Promise.all([http('/heat'), http('/zones')])
+    return { city: heat.city, hourly: heat.hourly, zones: zones.zones.filter((z) => z.heat) }
   },
 
-  // POST /api/assistant: the City of Athens assistant (+ heat/cool-down answers from our data)
+  // GET /api/parking: parking stations near the centre (OpenStreetMap): garages and named public lots
+  getParking: async () => (await http('/parking')).parking.map((p) => ({ ...p, lng: p.lon })),
+
+  // POST /api/assistant: the City of Athens assistant (+ heat/cool-down answers from our data, near the user)
   askAgent: async (message) => {
-    const r = await http('/assistant', { method: 'POST', body: { text: message, conversation_id: conversationId } })
+    const pos = currentPosition()
+    const r = await http('/assistant', {
+      method: 'POST',
+      body: { text: message, conversation_id: conversationId, ...(pos && { lat: pos.lat, lon: pos.lng }) },
+    })
     conversationId = r.conversation_id
     return { reply: r.text }
   },

@@ -10,6 +10,17 @@ import { CloseIcon, SendIcon } from '../ui/Icons'
  * above the type bar (so it "talks" from where you type).
  * Used in the desktop sidebar and in the mobile bottom sheet.
  */
+
+// The assistant's replies use "**bold**" and "- Title: details" (from our own
+// local answers and from the AthensGov bot) — render the bold and put the
+// details on their own line instead of showing literal asterisks inline.
+function formatContent(text) {
+  const withLineBreak = text.replace(/^(-\s*)?\*\*(.+?)\*\*:\s*/gm, (_, dash = '', title) => `${dash}**${title}**\n`)
+  return withLineBreak.split('\n').flatMap((line, i) => {
+    const parts = line.split(/\*\*(.+?)\*\*/g).map((part, j) => (j % 2 === 1 ? <strong key={`${i}-${j}`}>{part}</strong> : part))
+    return i === 0 ? parts : [<br key={`br-${i}`} />, ...parts]
+  })
+}
 export default function ChatPanel({ onClose, autoFocus = false, ballSize = 'h-16 w-16', className = '' }) {
   const { t } = useLang()
   const { palette, isDark } = useTheme()
@@ -63,7 +74,7 @@ export default function ChatPanel({ onClose, autoFocus = false, ballSize = 'h-16
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <p
-              className={`max-w-[90%] whitespace-pre-wrap rounded-2xl px-3 py-1.5 text-sm ${
+              className={`max-w-[90%] whitespace-pre-wrap break-words rounded-2xl px-3 py-1.5 text-sm ${
                 m.role === 'user'
                   ? 'rounded-ee-sm bg-primary text-white'
                   : m.error
@@ -71,7 +82,7 @@ export default function ChatPanel({ onClose, autoFocus = false, ballSize = 'h-16
                     : 'rounded-es-sm bg-surface-2 text-ink'
               }`}
             >
-              {m.content}
+              {formatContent(m.content)}
             </p>
           </div>
         ))}

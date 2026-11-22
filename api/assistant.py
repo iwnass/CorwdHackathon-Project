@@ -1,6 +1,8 @@
-# POST /api/assistant  {"text": "...", "conversation_id"?: "...", "lat"?: 37.98, "lon"?: 23.73, "engine"?: "llm"}
-#   → the City of Athens assistant (AthensGov Sandbox) for city services; heat/cooling questions answered from
-#     our own data. Send back the returned conversation_id with the next message to keep the dialogue going.
+# POST /api/assistant  {"text": "...", "conversation_id"?: "...", "lat"?: 37.98, "lon"?: 23.73}
+#   → the City of Athens assistant (AthensGov Sandbox, rules engine only — scoped to the registered
+#     municipal services, never the free-form "llm" engine) for city services; heat/cooling questions
+#     answered from our own data. Send back the returned conversation_id with the next message to keep
+#     the dialogue going.
 #   503 if ATHENSGOV_SANDBOX_KEY is not set, 429 when the shared key's per-minute limit is reached.
 import os
 import re
@@ -25,7 +27,7 @@ def get(q, body, ip=None):
         lat = float_param({"lat": body.get("lat")}, "lat", -90, 90)
         lon = float_param({"lon": body.get("lon")}, "lon", -180, 180)
     try:
-        return assistant.ask(text, conv, lat, lon, body.get("engine"))
+        return assistant.ask(text, conv, lat, lon)
     except assistant.NotConfigured as e:
         raise HttpError(503, f"assistant unavailable: {e}")
     except assistant.AthensGovError as e:

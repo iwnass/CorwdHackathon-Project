@@ -1,17 +1,30 @@
+import { useTheme } from '../../context/ThemeContext'
 import { useLang } from '../../i18n/LanguageContext'
+import SpotlightCard from '../reactbits/SpotlightCard'
 
-// Glassy card tinted with the theme color (the dot grid shows faintly behind it).
+// Glassy card tinted with the theme color (the dot grid shows faintly behind it); a soft glow in the
+// accent colour follows the cursor and lights the card's edge (React Bits SpotlightCard).
 export function Card({ title, action, children, className = '', bodyClassName = '' }) {
+  const { isDark } = useTheme()
   return (
-    <section className={`rounded-xl bg-surface/85 shadow-sm ring-1 ring-line backdrop-blur-md ${className}`}>
-      {title && (
-        <header className="flex items-center justify-between border-b border-line px-4 py-2.5">
-          <h2 className="text-sm font-semibold text-ink">{title}</h2>
-          {action}
-        </header>
-      )}
-      <div className={bodyClassName}>{children}</div>
-    </section>
+    <SpotlightCard
+      theme={isDark ? 'dark' : 'light'}
+      spotlightColor="var(--primary-light)"
+      intensity={isDark ? 0.22 : 0.5}
+      borderGlow={0.9}
+      className={`rounded-xl! p-0! bg-surface/85 shadow-sm backdrop-blur-md ${className}`}
+      style={{ '--spotlight-card-surface': 'transparent', '--spotlight-card-border': 'var(--line)', '--spotlight-card-shadow': 'none' }}
+    >
+      <section>
+        {title && (
+          <header className="flex items-center justify-between border-b border-line px-4 py-2.5">
+            <h2 className="text-sm font-semibold text-ink">{title}</h2>
+            {action}
+          </header>
+        )}
+        <div className={bodyClassName}>{children}</div>
+      </section>
+    </SpotlightCard>
   )
 }
 

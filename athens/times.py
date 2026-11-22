@@ -30,8 +30,12 @@ def iso_utc(dt):
     return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def athens_local(dt):
+    return dt.astimezone(ATHENS or _athens_offset(dt))
+
+
 def iso_local(dt):
-    return dt.astimezone(ATHENS or _athens_offset(dt)).isoformat(timespec="minutes")
+    return athens_local(dt).isoformat(timespec="minutes")
 
 
 def now_utc():

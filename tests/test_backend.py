@@ -754,7 +754,42 @@ class Http(unittest.TestCase):
             self.assertTrue(hasattr(mod, "handler"), f)
         self.assertEqual(ROUTES["/api/here"][1], "private, no-store")  # personal location: never cached
         self.assertEqual(ROUTES["/api/track"][1], "private, no-store")
-        self.assertEqual(sorted(ROUTES), ["/api/assistant", "/api/config", "/api/crowds", "/api/ev", "/api/events", "/api/health", "/api/heat", "/api/here", "/api/i18n", "/api/metro", "/api/places", "/api/presence", "/api/stations", "/api/track", "/api/traffic", "/api/zones"])
+        self.assertEqual(sorted(ROUTES), ["/api/assistant", "/api/config", "/api/crowds", "/api/ev", "/api/events", "/api/health", "/api/heat", "/api/here", "/api/i18n", "/api/metro", "/api/parking", "/api/places", "/api/presence", "/api/stations", "/api/track", "/api/traffic", "/api/zones"])
+
+
+class EvHistory(unittest.TestCase):
+    def test_one_sample_per_slot_and_24h_window(self):
+        from athens import ev, presence
+        store = presence.MemoryStore()
+        redis = lambda *cs: [store.run([str(x) for x in c]) for c in cs]  # noqa: E731
+        c = lambda free, pts, lat=37.9838, down=0: {"lat": lat, "lon": 23.7275, "points": pts, "available": free,  # noqa: E731
+                                                    "status": {"ev_out_of_order": down}}
+        items = [c(1, 4), c(0, 2, down=2), c(0, 4, lat=38.2)]  # all-down station and one 24 km away are left out
+        self.assertEqual(ev.occupancy(items), 75)
+        t0 = 1_800_000_000 - 1_800_000_000 % 600
+        self.assertTrue(ev.record_occupancy(items, t0, redis))
+        self.assertFalse(ev.record_occupancy(items, t0 + 60, redis))  # same 10-minute slot
+        self.assertTrue(ev.record_occupancy([c(4, 4)], t0 + 600, redis))
+        self.assertEqual(ev.occupancy_history(t0 + 601, redis), [{"time": t0, "occupancy": 75}, {"time": t0 + 600, "occupancy": 0}])
+        self.assertEqual(ev.occupancy_history(t0 + 25 * 3600, redis), [])
+
+
+class Parking(unittest.TestCase):
+    def test_keeps_garages_and_named_lots_and_falls_back_to_snapshot(self):
+        from athens import parking
+        osm = {"elements": [
+            {"type": "way", "id": 1, "center": {"lat": 37.98, "lon": 23.73},
+             "tags": {"parking": "underground", "capacity": "642", "fee": "yes", "capacity:charging": "2"}},
+            {"type": "node", "id": 2, "lat": 37.97, "lon": 23.72, "tags": {"parking": "surface"}},  # unnamed lot: dropped
+            {"type": "node", "id": 3, "lat": 37.96, "lon": 23.71, "tags": {"name": "Lot", "wheelchair": "yes"}}]}
+        got = parking.normalize(osm)
+        self.assertEqual([(p["id"], p["type"], p["capacity"], p["ev_points"], p["fee"]) for p in got],
+                         [("way/1", "underground", 642, 2, True), ("node/3", "surface", None, None, None)])
+        self.assertTrue(got[1]["wheelchair"])
+
+        def down():
+            raise OSError("overpass down")
+        self.assertGreater(len(parking.load(down)), 50)  # data/parking.json
 
 
 if __name__ == "__main__":
