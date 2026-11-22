@@ -87,15 +87,17 @@ const PLACES = [
 ]
 
 // Sample occupancy curve (% of charging points in use), one point per 10 minutes over the last 24 hours.
-// Also shown, labelled as sample data, on the EV page while no real history exists. The wobble is fixed
-// per 10-minute slot so the line doesn't change shape on every refresh.
+// Also shown, labelled as sample data, on the EV page while no real history exists. A smooth daily shape
+// (morning rise, midday plateau, evening peak) that depends only on the time of day, so it's stable on refresh.
 export function sampleEvUsage() {
-  const curve = (h) => 15 + (h >= 8 && h <= 11 ? 35 : 0) + (h >= 17 && h <= 21 ? 45 : 0) + (h >= 12 && h <= 16 ? 20 : 0)
+  const bump = (t, at, width, height) => height * Math.exp(-(((t - at) / width) ** 2))
   const now = Date.now() - (Date.now() % 600000)
   return Array.from({ length: 144 }, (_, i) => {
     const time = now - (143 - i) * 600000
-    const wobble = ((time / 600000) * 7919) % 13 - 6
-    return { time, occupancy: Math.min(100, Math.max(0, curve(new Date(time).getHours()) + wobble)) }
+    const d = new Date(time)
+    const t = d.getHours() + d.getMinutes() / 60
+    const occupancy = 12 + bump(t, 9.5, 1.8, 30) + bump(t, 14, 2.5, 18) + bump(t, 19, 2, 42) + 2 * Math.sin(t * 1.7)
+    return { time, occupancy: Math.round(Math.min(100, Math.max(0, occupancy))) }
   })
 }
 
