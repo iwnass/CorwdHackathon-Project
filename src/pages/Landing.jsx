@@ -10,7 +10,7 @@ import { useLang } from '../i18n/LanguageContext'
 // First screen the user sees. The buttons open the app's sections.
 export default function Landing() {
   const { t } = useLang()
-  const items = useNavItems()
+  const items = useNavItems().filter((i) => i.to !== '/heat')
 
   return (
     <div className="relative h-full overflow-y-auto bg-[#120f17] font-landing text-[#f1ecfa]">
