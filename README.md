@@ -290,3 +290,4 @@ carbonara
   mpamia me kotopoulo
 kotopoulo ala creme
 xtapodaki me kokkinisto kofto makaronaki
+streidia kai koxlioi
