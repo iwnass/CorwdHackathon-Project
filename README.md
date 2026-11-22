@@ -289,3 +289,4 @@ there). Missing files fall back to the drawn SVG stickers.
 carbonara
   mpamia me kotopoulo
 kotopoulo ala creme
+xtapodaki me kokkinisto kofto makaronaki
