@@ -35,6 +35,9 @@ export const SendIcon = (p) => (
 export const CoffeeIcon = (p) => (
   <svg {...base} {...p}><path d="M17 8h1a4 4 0 1 1 0 8h-1" /><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z" /><path d="M6 2v2M10 2v2M14 2v2" /></svg>
 )
+export const FlagIcon = (p) => (
+  <svg {...base} {...p}><path d="M4 22V4a1 1 0 0 1 1-1h12l-2.5 4.5L17 12H5" /></svg>
+)
 export const ChatIcon = (p) => (
   <svg {...base} {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
 )

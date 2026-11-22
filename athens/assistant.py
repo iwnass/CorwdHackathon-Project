@@ -14,7 +14,7 @@ import unicodedata
 import urllib.error
 import urllib.request
 
-from . import cooling, env
+from . import cooling, env, events
 from .geo import haversine
 
 BASE = os.environ.get("ATHENSGOV_SANDBOX_URL", "https://athensgov.cityofathens.gr/sandbox")
@@ -172,6 +172,35 @@ def acropolis_metro_answer(greek):
     return _reply("acropolis_metro", text, [card])
 
 
+# "What events are on today in Athens?" (a suggested quick question): answered from our own events data
+# (Ticketmaster via events.py), never forwarded to the city bot, whose sandbox events are fictional.
+_TODAY_WORDS = ("σημερα", "αποψε", "today", "tonight", "simera", "apopse")
+_EVENT_WORDS = ("εκδηλωσ", "συναυλ", "γινεται", "event", "concert", "happening", "on in athens", "ekdilos")
+
+
+def is_events_today_question(text):
+    t = _fold(text)
+    return any(w in t for w in _TODAY_WORDS) and any(w in t for w in _EVENT_WORDS)
+
+
+def events_today_answer(greek, limit=5):
+    try:
+        d, _ = events.data()
+    except (events.NotConfigured, events.TicketmasterError):
+        return _reply("events_today", "Οι εκδηλώσεις δεν είναι διαθέσιμες αυτή τη στιγμή." if greek
+                      else "Events aren't available right now.")
+    today = events.upcoming(d, when="today", limit=limit)["events"]
+    if not today:
+        return _reply("events_today", "Δεν βρήκα εκδηλώσεις για σήμερα στην Αθήνα." if greek
+                      else "I couldn't find any events in Athens today.")
+    lines = [f"- **{e['name']}**: " + " · ".join(x for x in ((e["time"] or "")[:5], e["venue"]["name"]) if x)
+             for e in today]
+    cards = [{"type": "event", "title": e["name"], "data": {"lat": e["venue"]["lat"], "lng": e["venue"]["lon"], "url": e["url"]}}
+             for e in today if e["venue"]["lat"] is not None]
+    head = "Σήμερα στην Αθήνα:" if greek else "On today in Athens:"
+    return _reply("events_today", "\n".join([head, *lines]), cards)
+
+
 def _reply(name, text, cards=()):
     return {"source": "athens-pulse", "text": text, "speech": text.replace("**", ""),
             "intent": {"name": name, "confidence": 1.0}, "cards": list(cards), "suggestions": []}
@@ -216,6 +245,8 @@ def ask(text, conversation_id=None, lat=None, lon=None, request=None):
         return {**off_topic_answer(greek), "conversation_id": conversation_id, "truncated": truncated}
     if is_acropolis_metro_question(text):
         return {**acropolis_metro_answer(greek), "conversation_id": conversation_id, "truncated": truncated}
+    if is_events_today_question(text):
+        return {**events_today_answer(greek), "conversation_id": conversation_id, "truncated": truncated}
 
     name = topic(text)
     if name:

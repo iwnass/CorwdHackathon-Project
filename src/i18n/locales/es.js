@@ -6,6 +6,8 @@ export default {
   'nav.events': 'Eventos',
   'nav.ev': "Carga y aparcamiento",
   'nav.donate': 'Buy me a coffee',
+  'nav.report': "Informar de un problema",
+  'nav.reportThanks': "¡Gracias! Los informes llegarán pronto.",
   'nav.openMenu': 'Abrir menú',
   'nav.closeMenu': 'Cerrar menú',
 
@@ -64,7 +66,7 @@ export default {
   'agent.error': 'Lo siento, no puedo conectar con el servidor ahora mismo. Inténtalo de nuevo.',
   'agent.demoReply': '(respuesta de prueba) Preguntaste: «{q}». Cuando el backend esté conectado, responderé con datos en tiempo real del Municipio de Atenas.',
   'agent.s1': "¿Qué hay esta noche en Atenas?",
-  'agent.s2': "¿Cómo llego a la Acrópolis en metro?",
+  'agent.s2': "¿Qué eventos hay hoy en Atenas?",
   'agent.s3': "¿Funciona el metro toda la noche?",
 
   'common.error': 'No se pudieron cargar los datos.',

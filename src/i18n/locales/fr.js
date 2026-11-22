@@ -6,6 +6,8 @@ export default {
   'nav.events': 'Événements',
   'nav.ev': "Recharge et parkings",
   'nav.donate': 'Buy me a coffee',
+  'nav.report': "Signaler un problème",
+  'nav.reportThanks': "Merci ! Le signalement arrive bientôt.",
   'nav.openMenu': 'Ouvrir le menu',
   'nav.closeMenu': 'Fermer le menu',
 
@@ -64,7 +66,7 @@ export default {
   'agent.error': 'Désolé, le serveur est injoignable pour le moment. Veuillez réessayer.',
   'agent.demoReply': '(réponse de démo) Vous avez demandé : « {q} ». Une fois le backend connecté, je répondrai avec des données en direct sur la municipalité d’Athènes.',
   'agent.s1': "Que faire à Athènes ce soir ?",
-  'agent.s2': "Comment aller à l’Acropole en métro ?",
+  'agent.s2': "Quels événements y a-t-il aujourd'hui à Athènes ?",
   'agent.s3': "Le métro roule-t-il toute la nuit ?",
 
   'common.error': 'Impossible de charger les données.',

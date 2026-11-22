@@ -6,6 +6,8 @@ export default {
   'nav.events': 'Veranstaltungen',
   'nav.ev': "Laden & Parken",
   'nav.donate': 'Buy me a coffee',
+  'nav.report': "Problem melden",
+  'nav.reportThanks': "Danke! Meldungen kommen bald.",
   'nav.openMenu': 'Menü öffnen',
   'nav.closeMenu': 'Menü schließen',
 
@@ -64,7 +66,7 @@ export default {
   'agent.error': 'Der Server ist gerade nicht erreichbar. Bitte versuche es erneut.',
   'agent.demoReply': '(Demo-Antwort) Du hast gefragt: „{q}“. Sobald das Backend verbunden ist, antworte ich mit Live-Daten für die Gemeinde Athen.',
   'agent.s1': "Was ist heute Abend in Athen los?",
-  'agent.s2': "Wie komme ich mit der Metro zur Akropolis?",
+  'agent.s2': "Welche Veranstaltungen gibt es heute in Athen?",
   'agent.s3': "Fährt die Metro die ganze Nacht?",
 
   'common.error': 'Daten konnten nicht geladen werden.',

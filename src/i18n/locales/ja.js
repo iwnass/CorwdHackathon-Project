@@ -6,6 +6,8 @@ export default {
   'nav.events': 'イベント',
   'nav.ev': "充電・駐車場",
   'nav.donate': 'Buy me a coffee',
+  'nav.report': "問題を報告",
+  'nav.reportThanks': "ありがとうございます！報告機能は近日公開予定です。",
   'nav.openMenu': 'メニューを開く',
   'nav.closeMenu': 'メニューを閉じる',
 
@@ -64,7 +66,7 @@ export default {
   'agent.error': '申し訳ありません。現在サーバーに接続できません。もう一度お試しください。',
   'agent.demoReply': '（デモ回答）質問：「{q}」。バックエンドに接続されると、アテネ市のリアルタイムデータでお答えします。',
   'agent.s1': "今夜アテネで何がある？",
-  'agent.s2': "地下鉄でアクロポリスへの行き方は？",
+  'agent.s2': "今日のアテネのイベントは？",
   'agent.s3': "地下鉄は終夜運行している？",
 
   'common.error': 'データを読み込めませんでした。',
