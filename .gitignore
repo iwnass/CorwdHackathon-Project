@@ -1,5 +1,6 @@
 .env*
 !.env.example
+!.env.capacitor
 .vercel
 __pycache__/
 *.pyc
