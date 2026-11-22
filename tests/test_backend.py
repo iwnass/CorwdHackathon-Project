@@ -421,7 +421,7 @@ class Events(unittest.TestCase):
         self.assertEqual([e["id"] for e in events.upcoming(d, days=90, category="music")["events"]], ["e1", "e4"])
 
     def test_endpoint_without_key_and_key_never_leaks(self):
-        spec = importlib.util.spec_from_file_location("t_events", os.path.join(ROOT, "api", "events.py"))
+        spec = importlib.util.spec_from_file_location("t_events", os.path.join(ROOT, "endpoints", "events.py"))
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         with mock.patch.dict(os.environ, {"TICKETMASTER_API_KEY": ""}):
@@ -556,7 +556,7 @@ class Assistant(unittest.TestCase):
         self.assertNotIn("**", el["speech"])                          # speech is plain text for TTS
 
     def test_endpoint_validation_and_key_safety(self):
-        spec = importlib.util.spec_from_file_location("t_assistant", os.path.join(ROOT, "api", "assistant.py"))
+        spec = importlib.util.spec_from_file_location("t_assistant", os.path.join(ROOT, "endpoints", "assistant.py"))
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         call = lambda body: run(lambda q: mod.get(q, body, "1.1.1.1"), "/api/assistant")  # noqa: E731
@@ -693,7 +693,7 @@ class Presence(unittest.TestCase):
                 self.ping("spam-00000000000003", 37.9755, 23.7348, ip="6.6.6.6", now=now)
 
     def test_endpoint(self):
-        spec = importlib.util.spec_from_file_location("t_presence", os.path.join(ROOT, "api", "presence.py"))
+        spec = importlib.util.spec_from_file_location("t_presence", os.path.join(ROOT, "endpoints", "presence.py"))
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         bad = run(lambda q: mod.get(q, {"session": "x", "lat": 37.9, "lon": 23.7}, "1.1.1.1"), "/api/presence")
@@ -747,8 +747,8 @@ class Http(unittest.TestCase):
         self.assertNotIn("secret", body["error"])
 
     def test_all_routes_register(self):
-        for f in os.listdir(os.path.join(ROOT, "api")):
-            spec = importlib.util.spec_from_file_location(f"t_{f[:-3]}", os.path.join(ROOT, "api", f))
+        for f in os.listdir(os.path.join(ROOT, "endpoints")):
+            spec = importlib.util.spec_from_file_location(f"t_{f[:-3]}", os.path.join(ROOT, "endpoints", f))
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
             self.assertTrue(hasattr(mod, "handler"), f)

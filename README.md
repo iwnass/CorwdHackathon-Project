@@ -126,7 +126,8 @@ never sent to Ticketmaster: the backend fetches all Athens events once per 30 mi
 ## Layout
 
 ```
-api/            one file per endpoint (Vercel maps api/x.py → /api/x)
+endpoints/      one file per endpoint (endpoints/x.py → /api/x)
+api/index.py    the single Vercel Function serving every /api/* route (Hobby allows ≤ 12 Functions)
 athens/ckan.py      CKAN client, dataset discovery, coordinates
 athens/env.py       heat: 24 h window, per-hour folding, zones, location, tracking
 athens/traffic.py   WiFi footfall: latest day, 7-day comparison, history

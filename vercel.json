@@ -1,13 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
+  "outputDirectory": "dist",
   "regions": ["fra1"],
-  "functions": {
-    "api/**/*.py": {
-      "maxDuration": 30
-    }
-  },
   "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index"
+    },
     {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
