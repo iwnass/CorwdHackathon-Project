@@ -13,6 +13,7 @@ import { useMapFocus } from '../hooks/useMapFocus'
 import { useUserLocation } from '../hooks/useUserLocation'
 import { useLang } from '../i18n/LanguageContext'
 import { api } from '../services/api'
+import { sampleEvUsage } from '../services/mockData'
 import { distanceM } from '../utils/transit'
 
 const TWO_MIN = 2 * 60 * 1000
@@ -114,13 +115,23 @@ export default function EvCharging() {
 
         {/* the backend's own 10-minute samples: the curve fills in over the day */}
         <ChartCard title={t('ev.occupancy')} query={usage}>
-          {(rows) =>
-            rows.length < 2 ? (
-              <p className="flex h-full items-center justify-center px-6 text-center text-sm text-muted">{t('ev.collecting')}</p>
-            ) : (
-              <LineChart series={[{ name: t('series.today'), data: rows.map((r) => ({ x: r.time, y: r.occupancy })) }]} />
+          {(rows) => {
+            // no real history yet: a sample curve, clearly labelled as such
+            const sample = rows.length < 2
+            const data = (sample ? sampleEvUsage() : rows).map((r) => ({ x: r.time, y: r.occupancy }))
+            return (
+              <div className="flex h-full flex-col">
+                {sample && (
+                  <p className="mb-1 self-start rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                    {t('ev.sample')}
+                  </p>
+                )}
+                <div className="min-h-0 flex-1">
+                  <LineChart series={[{ name: t('series.today'), data }]} />
+                </div>
+              </div>
             )
-          }
+          }}
         </ChartCard>
       </div>
 

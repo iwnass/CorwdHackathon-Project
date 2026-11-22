@@ -47,7 +47,7 @@ export default {
   'ev.title': 'Stazioni di ricarica EV',
   'ev.free': 'Colonnine libere per stazione',
   'ev.occupancy': 'Occupazione colonnine oggi (%)',
-  'ev.collecting': "Raccolta dati in corso: la curva di occupazione si completa nel corso della giornata.",
+  'ev.sample': "Dati di esempio: la curva in tempo reale non è ancora disponibile",
   'ev.list': 'Stazioni',
   'ev.available': 'disponibili',
   'ev.busy': 'Occupata',

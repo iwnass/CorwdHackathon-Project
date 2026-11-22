@@ -47,7 +47,7 @@ export default {
   'ev.title': 'Estaciones de carga de VE',
   'ev.free': 'Cargadores libres por estación',
   'ev.occupancy': 'Ocupación de cargadores hoy (%)',
-  'ev.collecting': "Recopilando datos: la curva de ocupación se completa a lo largo del día.",
+  'ev.sample': "Datos de ejemplo: la curva en vivo aún no está disponible",
   'ev.list': 'Estaciones',
   'ev.available': 'disponibles',
   'ev.busy': 'Ocupada',

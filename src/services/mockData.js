@@ -86,6 +86,19 @@ const PLACES = [
   { kind: 'pool', name: { en: 'Athens Municipal Pool', el: 'Δημοτικό Κολυμβητήριο Αθηνών' }, lat: 37.9950, lng: 23.7500 },
 ]
 
+// Sample occupancy curve (% of charging points in use), one point per 10 minutes over the last 24 hours.
+// Also shown, labelled as sample data, on the EV page while no real history exists. The wobble is fixed
+// per 10-minute slot so the line doesn't change shape on every refresh.
+export function sampleEvUsage() {
+  const curve = (h) => 15 + (h >= 8 && h <= 11 ? 35 : 0) + (h >= 17 && h <= 21 ? 45 : 0) + (h >= 12 && h <= 16 ? 20 : 0)
+  const now = Date.now() - (Date.now() % 600000)
+  return Array.from({ length: 144 }, (_, i) => {
+    const time = now - (143 - i) * 600000
+    const wobble = ((time / 600000) * 7919) % 13 - 6
+    return { time, occupancy: Math.min(100, Math.max(0, curve(new Date(time).getHours()) + wobble)) }
+  })
+}
+
 export const mock = {
   // GET /events?lang=
   async getEvents(lang = 'en') {
@@ -176,12 +189,7 @@ export const mock = {
   // occupancy = % of charging points in use, one sample every 10 minutes over the last 24 hours
   async getEvUsage() {
     await delay()
-    const curve = (h) => 15 + (h >= 8 && h <= 11 ? 35 : 0) + (h >= 17 && h <= 21 ? 45 : 0) + (h >= 12 && h <= 16 ? 20 : 0)
-    const now = Date.now() - (Date.now() % 600000)
-    return Array.from({ length: 144 }, (_, i) => {
-      const time = now - (143 - i) * 600000
-      return { time, occupancy: Math.min(100, curve(new Date(time).getHours()) + rand(-6, 6)) }
-    })
+    return sampleEvUsage()
   },
 
   // GET /transit/lines   (public STASY / Hellenic Train timetables, see transitData.js)
