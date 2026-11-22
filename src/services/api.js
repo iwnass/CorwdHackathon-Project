@@ -100,7 +100,15 @@ const real = {
   },
 
   // GET /api/ev?history=1: our own 10-minute samples of live availability (the registry keeps no history)
-  getEvUsage: async () => (await http('/ev', { params: { history: 1 } })).history.map((r) => ({ time: r.time * 1000, occupancy: r.occupancy })),
+  // 503 = no history store set up (yet): an empty curve ("collecting data"), not an error
+  getEvUsage: async () => {
+    try {
+      return (await http('/ev', { params: { history: 1 } })).history.map((r) => ({ time: r.time * 1000, occupancy: r.occupancy }))
+    } catch (e) {
+      if (e.status === 503) return []
+      throw e
+    }
+  },
 
   // GET /api/metro?station=: next departures per line and direction (timetable estimates)
   getDepartures: (stationId) => http('/metro', { params: { station: stationId } }),

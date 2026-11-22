@@ -114,7 +114,13 @@ export default function EvCharging() {
 
         {/* the backend's own 10-minute samples: the curve fills in over the day */}
         <ChartCard title={t('ev.occupancy')} query={usage}>
-          {(rows) => <LineChart series={[{ name: t('series.today'), data: rows.map((r) => ({ x: r.time, y: r.occupancy })) }]} />}
+          {(rows) =>
+            rows.length < 2 ? (
+              <p className="flex h-full items-center justify-center px-6 text-center text-sm text-muted">{t('ev.collecting')}</p>
+            ) : (
+              <LineChart series={[{ name: t('series.today'), data: rows.map((r) => ({ x: r.time, y: r.occupancy })) }]} />
+            )
+          }
         </ChartCard>
       </div>
 
