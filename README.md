@@ -283,3 +283,5 @@ there). Missing files fall back to the drawn SVG stickers.
   typical, and a station list with power, connectors and €/kWh. A good public data source
   for the backend is Open Charge Map (openchargemap.org).
 - **Events** show the average price per person (or "Free").
+
+  made with love <3
