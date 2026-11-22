@@ -287,8 +287,9 @@ there). Missing files fall back to the drawn SVG stickers.
 
   made with love <3
 carbonara
-  mpamia me kotopoulo
+mpamia me kotopoulo
 kotopoulo ala creme
 xtapodaki me kokkinisto kofto makaronaki
 streidia kai koxlioi
 stavlisia
+patates thganites
