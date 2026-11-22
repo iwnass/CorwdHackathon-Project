@@ -754,7 +754,37 @@ class Http(unittest.TestCase):
             self.assertTrue(hasattr(mod, "handler"), f)
         self.assertEqual(ROUTES["/api/here"][1], "private, no-store")  # personal location: never cached
         self.assertEqual(ROUTES["/api/track"][1], "private, no-store")
-        self.assertEqual(sorted(ROUTES), ["/api/assistant", "/api/config", "/api/crowds", "/api/ev", "/api/events", "/api/health", "/api/heat", "/api/here", "/api/i18n", "/api/metro", "/api/parking", "/api/places", "/api/presence", "/api/stations", "/api/track", "/api/traffic", "/api/zones"])
+        self.assertEqual(sorted(ROUTES), ["/api/assistant", "/api/config", "/api/crowds", "/api/culture", "/api/ev", "/api/events", "/api/health", "/api/heat", "/api/here", "/api/i18n", "/api/metro", "/api/parking", "/api/places", "/api/presence", "/api/stations", "/api/track", "/api/traffic", "/api/zones"])
+
+
+class Culture(unittest.TestCase):
+    PAGE = """<title>Treat Yourself &#8211; A Sunday Market￼ - Culture is Athens - Πολιτισμός είναι η Αθήνα</title>
+    <li class="gt-start-date"><div class="gt-icon"><svg></svg></div><div class="gt-content"><div class="gt-title">Ημερομηνία</div><div class="gt-inner">22 Νοεμβρίου 2026 10:00</div></div></li>
+    <li class="gt-status"><div class="gt-content"><div class="gt-title">Κατάσταση</div><div class="gt-inner">Τρέχουσα</div></div></li>
+    <li class="gt-venue"><div class="gt-content"><div class="gt-title">Χώρος</div><div class="gt-inner"><ul><li><a href="/venue/x/">Δημοτική Αγορά Κυψέλης</a></li></ul></div></div></li>
+    <div class="gt-price">Free</div><ul data-zoom="16" data-lat="38.0008" data-lng="23.7379" data-type="true"></ul>"""
+
+    def test_parse_date(self):
+        from athens import culture
+        self.assertEqual(culture.parse_date("22 Νοεμβρίου 2026 10:00"), ("2026-11-22", "10:00"))
+        self.assertEqual(culture.parse_date("3 Μαΐου 2027"), ("2027-05-03", None))
+        self.assertEqual(culture.parse_date("31 Φεβρουαρίου 2026"), (None, None))
+        self.assertEqual(culture.parse_date("soon"), (None, None))
+
+    def test_parse_event_and_selection(self):
+        from athens import culture
+        e = culture.parse_event(self.PAGE, "https://cultureisathens.gr/event/x/")
+        self.assertEqual((e["title"], e["date"], e["time"], e["status"], e["venue"], e["free"], e["lat"], e["lon"]),
+                         ("Treat Yourself – A Sunday Market", "2026-11-22", "10:00", "current", "Δημοτική Αγορά Κυψέλης",
+                          True, 38.0008, 23.7379))
+        self.assertIsNone(culture.parse_event("<title>No date</title>", "u"))
+        old = {**e, "date": "2026-10-01", "status": "current", "url": "old"}
+        past = {**e, "date": "2026-10-02", "status": "past", "url": "past"}
+        later = {**e, "date": "2026-12-01", "status": "upcoming", "url": "later"}
+        d = {"events": [old, past, e, later]}
+        self.assertEqual([x["url"] for x in culture.on(d, "2026-11-22")], [e["url"], "old"])
+        self.assertEqual([x["url"] for x in culture.upcoming(d, "2026-11-22")], ["old", e["url"], "later"])
+        self.assertEqual(culture.nearby([e, {**e, "lat": None}], 38.0008, 23.7379)[0]["distance_m"], 0)
 
 
 class EvHistory(unittest.TestCase):

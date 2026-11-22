@@ -14,7 +14,7 @@ import unicodedata
 import urllib.error
 import urllib.request
 
-from . import cooling, env, events
+from . import cooling, culture, env, events
 from .geo import haversine
 
 BASE = os.environ.get("ATHENSGOV_SANDBOX_URL", "https://athensgov.cityofathens.gr/sandbox")
@@ -172,8 +172,8 @@ def acropolis_metro_answer(greek):
     return _reply("acropolis_metro", text, [card])
 
 
-# "What events are on today in Athens?" (a suggested quick question): answered from our own events data
-# (Ticketmaster via events.py), never forwarded to the city bot, whose sandbox events are fictional.
+# "What events are on today in Athens?" (a suggested quick question): answered from the City of Athens' own
+# events (culture.py), else Ticketmaster (events.py); never forwarded to the city bot, whose sandbox events are fictional.
 _TODAY_WORDS = ("σημερα", "αποψε", "today", "tonight", "simera", "apopse")
 _EVENT_WORDS = ("εκδηλωσ", "συναυλ", "γινεται", "event", "concert", "happening", "on in athens", "ekdilos")
 
@@ -183,21 +183,46 @@ def is_events_today_question(text):
     return any(w in t for w in _TODAY_WORDS) and any(w in t for w in _EVENT_WORDS)
 
 
-def events_today_answer(greek, limit=5):
+def _city_events_today(limit):
+    """The City of Athens' own events today (cultureisathens.gr), or None if its site can't be read."""
+    try:
+        d, _ = culture.data()
+    except Exception:  # the portal is down or changed: fall back to Ticketmaster
+        return None
+    today = events.when_range("today")[0].isoformat()
+    # a time only for what starts today: an exhibition running since October has no "today" time
+    return [{"name": e["title"], "time": e["time"] if e["date"] == today else None, "venue": e["venue"],
+             "free": e["free"], "lat": e["lat"], "lon": e["lon"], "url": e["url"]}
+            for e in culture.on(d, today)[:limit]]
+
+
+def _ticketmaster_today(limit):
     try:
         d, _ = events.data()
     except (events.NotConfigured, events.TicketmasterError):
+        return None
+    return [{"name": e["name"], "time": (e["time"] or "")[:5] or None, "venue": e["venue"]["name"], "free": None,
+             "lat": e["venue"]["lat"], "lon": e["venue"]["lon"], "url": e["url"]}
+            for e in events.upcoming(d, when="today", limit=limit)["events"]]
+
+
+def events_today_answer(greek, limit=5):
+    """The City of Athens' events first; Ticketmaster only when the city has none today (or can't be reached)."""
+    city = _city_events_today(limit)
+    today, by_city = (city, True) if city else (_ticketmaster_today(limit), False)
+    if today is None and city is None:
         return _reply("events_today", "Οι εκδηλώσεις δεν είναι διαθέσιμες αυτή τη στιγμή." if greek
                       else "Events aren't available right now.")
-    today = events.upcoming(d, when="today", limit=limit)["events"]
     if not today:
         return _reply("events_today", "Δεν βρήκα εκδηλώσεις για σήμερα στην Αθήνα." if greek
                       else "I couldn't find any events in Athens today.")
-    lines = [f"- **{e['name']}**: " + " · ".join(x for x in ((e["time"] or "")[:5], e["venue"]["name"]) if x)
+    free = "δωρεάν" if greek else "free"
+    lines = [f"- **{e['name']}**: " + " · ".join(x for x in (e["time"], e["venue"], free if e["free"] else None) if x)
              for e in today]
-    cards = [{"type": "event", "title": e["name"], "data": {"lat": e["venue"]["lat"], "lng": e["venue"]["lon"], "url": e["url"]}}
-             for e in today if e["venue"]["lat"] is not None]
-    head = "Σήμερα στην Αθήνα:" if greek else "On today in Athens:"
+    cards = [{"type": "event", "title": e["name"], "data": {"lat": e["lat"], "lng": e["lon"], "url": e["url"]}}
+             for e in today if e["lat"] is not None]
+    head = (("Σήμερα από τον Δήμο Αθηναίων:" if greek else "On today from the City of Athens:") if by_city
+            else ("Σήμερα στην Αθήνα:" if greek else "On today in Athens:"))
     return _reply("events_today", "\n".join([head, *lines]), cards)
 
 

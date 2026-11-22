@@ -36,6 +36,24 @@ export default function Events() {
       : rows.sort((a, b) => a.date.localeCompare(b.date))
   }, [events.data, sort, category, origin])
 
+  // the 5 nearest events (in the chosen category) pinned on the map
+  const nearest = useMemo(
+    () =>
+      list
+        .filter((e) => e.lat != null && e.lng != null)
+        .map((e) => ({ e, d: distanceM(origin, e) }))
+        .sort((a, b) => a.d - b.d)
+        .slice(0, 5)
+        .map(({ e, d }) => ({
+          id: `near-${e.id}`,
+          lat: e.lat,
+          lng: e.lng,
+          color: '#8b5cf6',
+          label: `${e.title} · ${d < 1000 ? `${Math.round(d / 10) * 10} m` : `${(d / 1000).toFixed(1)} km`}`,
+        })),
+    [list, origin],
+  )
+
   const compact = (n) => new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(n)
 
   const price = (e) =>
@@ -45,7 +63,7 @@ export default function Events() {
 
   return (
     <div className="space-y-4">
-      <MapPlaceholder ref={mapRef} focus={focus} onClearFocus={clearFocus} />
+      <MapPlaceholder ref={mapRef} focus={focus} onClearFocus={clearFocus} chips={nearest} loadingData={events.loading} />
 
       <h1 className="font-display text-xl font-bold tracking-tight sm:text-2xl bg-gradient-to-r from-primary-darker via-violet-600 to-fuchsia-500 bg-clip-text text-transparent dark:from-primary-light dark:via-violet-400 dark:to-fuchsia-400">{t('events.title')}</h1>
 
