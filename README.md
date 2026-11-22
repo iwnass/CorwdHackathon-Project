@@ -287,3 +287,4 @@ there). Missing files fall back to the drawn SVG stickers.
 
   made with love <3
 carbonara
+  mpamia me kotopoulo
