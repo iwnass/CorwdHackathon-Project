@@ -22,19 +22,24 @@ export default function Events() {
   const [sort, setSort] = useState('date') // 'date' | 'popular' | 'nearest'
   const [category, setCategory] = useState('all')
 
+  // today or later only: some sources list long-running events by a start date weeks in the past
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const upcoming = useMemo(() => (events.data ?? []).filter((e) => e.date >= today), [events.data, today])
+
   const categories = useMemo(
-    () => Array.from(new Set((events.data ?? []).map((e) => e.category).filter(Boolean))).sort(),
-    [events.data],
+    () => Array.from(new Set(upcoming.map((e) => e.category).filter(Boolean))).sort(),
+    [upcoming],
   )
 
   const origin = pos ?? SYNTAGMA
   const list = useMemo(() => {
-    const rows = (events.data ?? []).filter((e) => category === 'all' || e.category === category)
+    const rows = upcoming.filter((e) => category === 'all' || e.category === category)
     if (sort === 'nearest') return rows.sort((a, b) => distanceM(origin, a) - distanceM(origin, b))
     return sort === 'popular'
       ? rows.sort((a, b) => (b.popularity ?? -1) - (a.popularity ?? -1))
       : rows.sort((a, b) => a.date.localeCompare(b.date))
-  }, [events.data, sort, category, origin])
+  }, [upcoming, sort, category, origin])
 
   // the 5 nearest events (in the chosen category) pinned on the map
   const nearest = useMemo(
