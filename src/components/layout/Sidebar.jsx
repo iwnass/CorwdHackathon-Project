@@ -1,8 +1,9 @@
+import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { config } from '../../config'
 import { useLang } from '../../i18n/LanguageContext'
 import ChatPanel from '../chat/ChatPanel'
-import { CoffeeIcon } from '../ui/Icons'
+import { CheckIcon, CoffeeIcon, FlagIcon } from '../ui/Icons'
 import { useNavItems } from './navItems'
 
 /**
@@ -44,11 +45,37 @@ export default function Sidebar() {
         <ChatPanel className="flex-1" />
       </div>
 
-      {/* Donate */}
-      <div className="p-3">
+      {/* Donate + report a problem */}
+      <div className="flex gap-2 p-3">
         <DonateButton />
+        <ReportButton />
       </div>
     </nav>
+  )
+}
+
+// "Report a problem": a mockup for now — nothing is sent anywhere
+export function ReportButton() {
+  const { t } = useLang()
+  const [sent, setSent] = useState(false)
+
+  useEffect(() => {
+    if (!sent) return
+    const id = setTimeout(() => setSent(false), 2500)
+    return () => clearTimeout(id)
+  }, [sent])
+
+  const label = sent ? t('nav.reportThanks') : t('nav.report')
+  return (
+    <button
+      type="button"
+      onClick={() => setSent(true)}
+      title={label}
+      aria-label={label}
+      className="flex shrink-0 items-center justify-center rounded-lg bg-surface-2 px-3 text-muted ring-1 ring-line transition hover:text-ink"
+    >
+      {sent ? <CheckIcon className="h-5 w-5 text-green-600" /> : <FlagIcon className="h-5 w-5" />}
+    </button>
   )
 }
 
@@ -60,7 +87,7 @@ export function DonateButton() {
       href={config.donateUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center justify-center gap-2 rounded-lg bg-coffee px-3 py-2.5 text-center text-sm font-semibold text-gray-900 shadow-sm transition hover:brightness-95"
+      className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg bg-coffee px-3 py-2.5 text-center text-sm font-semibold text-gray-900 shadow-sm transition hover:brightness-95"
     >
       <CoffeeIcon className="h-5 w-5 shrink-0" />
       {t('nav.donate')}

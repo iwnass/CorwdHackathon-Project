@@ -6,6 +6,8 @@ export default {
   'nav.events': '活動',
   'nav.ev': "充電與停車",
   'nav.donate': 'Buy me a coffee',
+  'nav.report': "回報問題",
+  'nav.reportThanks': "謝謝！回報功能即將推出。",
   'nav.openMenu': '開啟選單',
   'nav.closeMenu': '關閉選單',
 
@@ -64,7 +66,7 @@ export default {
   'agent.error': '抱歉，目前無法連線到伺服器，請再試一次。',
   'agent.demoReply': '（示範回覆）你問：「{q}」。連接後端後，我會以雅典市的即時資料回答。',
   'agent.s1': "今晚雅典有什麼活動？",
-  'agent.s2': "怎麼搭地鐵去衛城？",
+  'agent.s2': "今天雅典有什麼活動？",
   'agent.s3': "地鐵通宵營運嗎？",
 
   'common.error': '無法載入資料。',

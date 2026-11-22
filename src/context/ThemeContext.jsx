@@ -25,10 +25,11 @@ export function ThemeProvider({ children }) {
     return THEME_COLORS[saved] ? saved : DEFAULT_COLOR
   })
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [showHeatmap, setShowHeatmap] = useState(() => read('showHeatmap', 'true') !== 'false')
+  // Off unless turned on in Settings. New key: the old 'showHeatmap' was saved as 'true' on every first visit.
+  const [showHeatmap, setShowHeatmap] = useState(() => read('heatSection', 'false') === 'true')
 
   useEffect(() => {
-    write('showHeatmap', String(showHeatmap))
+    write('heatSection', String(showHeatmap))
   }, [showHeatmap])
 
   useEffect(() => {

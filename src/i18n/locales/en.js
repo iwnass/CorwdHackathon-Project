@@ -8,6 +8,8 @@ export default {
   'nav.events': 'Events',
   'nav.ev': "EV & parking",
   'nav.donate': 'Buy me a coffee',
+  'nav.report': "Report a problem",
+  'nav.reportThanks': "Thanks! Reporting is coming soon.",
   'nav.openMenu': 'Open menu',
   'nav.closeMenu': 'Close menu',
 
@@ -66,7 +68,7 @@ export default {
   'agent.error': 'Sorry, I can’t reach the server right now. Please try again.',
   'agent.demoReply': '(demo reply) You asked: “{q}”. Once the backend is connected, I will answer with live data for the Municipality of Athens.',
   'agent.s1': "What’s on in Athens tonight?",
-  'agent.s2': "How do I get to the Acropolis by metro?",
+  'agent.s2': "What events are on today in Athens?",
   'agent.s3': "Is the metro running all night?",
 
   'common.error': 'Couldn’t load data.',

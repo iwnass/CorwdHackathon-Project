@@ -3,7 +3,7 @@ import { useTheme } from '../../context/ThemeContext'
 import { useLang } from '../../i18n/LanguageContext'
 import { THEME_COLORS } from '../../utils/themes'
 import { CheckIcon, CloseIcon, ContrastIcon, GlobeIcon, PaletteIcon, SettingsIcon, SunIcon } from '../ui/Icons'
-import { DonateButton } from './Sidebar'
+import { DonateButton, ReportButton } from './Sidebar'
 
 /**
  * Settings: light/dark mode (with mini previews), accent colour (re-tints the
@@ -147,8 +147,9 @@ export default function SettingsPanel() {
           </Section>
 
           {/* phones have no sidebar, so the donate button lives here */}
-          <div className="md:hidden">
+          <div className="flex gap-2 md:hidden">
             <DonateButton />
+            <ReportButton />
           </div>
         </div>
       </section>
