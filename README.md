@@ -286,3 +286,4 @@ there). Missing files fall back to the drawn SVG stickers.
 - **Events** show the average price per person (or "Free").
 
   made with love <3
+carbonara
