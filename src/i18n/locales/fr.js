@@ -47,7 +47,7 @@ export default {
   'ev.title': 'Bornes de recharge VE',
   'ev.free': 'Bornes libres par station',
   'ev.occupancy': 'Occupation des bornes aujourd’hui (%)',
-  'ev.collecting': "Collecte des données — la courbe d'occupation se remplit au fil de la journée.",
+  'ev.sample': "Données d'exemple — la courbe en direct n'est pas encore disponible",
   'ev.list': 'Stations',
   'ev.available': 'disponibles',
   'ev.busy': 'Occupée',

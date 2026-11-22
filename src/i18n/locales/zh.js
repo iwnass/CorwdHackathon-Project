@@ -47,7 +47,7 @@ export default {
   'ev.title': 'EV 充電站',
   'ev.free': '各站空閒充電樁',
   'ev.occupancy': '今日充電樁使用率 (%)',
-  'ev.collecting': "正在收集資料，使用率曲線會在一天中逐漸完整。",
+  'ev.sample': "範例資料：即時曲線尚未提供",
   'ev.list': '充電站',
   'ev.available': '可用',
   'ev.busy': '使用中',

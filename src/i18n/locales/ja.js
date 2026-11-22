@@ -47,7 +47,7 @@ export default {
   'ev.title': 'EV 充電スポット',
   'ev.free': 'スポット別の空き充電器',
   'ev.occupancy': '本日の充電器使用率 (%)',
-  'ev.collecting': "データ収集中です。利用率のグラフは一日を通して埋まっていきます。",
+  'ev.sample': "サンプルデータ：リアルタイムのグラフはまだ利用できません",
   'ev.list': '充電スポット',
   'ev.available': '空き',
   'ev.busy': '使用中',
