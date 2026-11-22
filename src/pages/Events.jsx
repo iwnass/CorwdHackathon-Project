@@ -7,14 +7,19 @@ import ScrollHint from '../components/ui/ScrollHint'
 import { ListSkeleton } from '../components/ui/Skeleton'
 import { useApi } from '../hooks/useApi'
 import { useMapFocus } from '../hooks/useMapFocus'
+import { useUserLocation } from '../hooks/useUserLocation'
 import { useLang } from '../i18n/LanguageContext'
 import { api } from '../services/api'
+import { distanceM } from '../utils/transit'
+
+const SYNTAGMA = { lat: 37.9755, lng: 23.7348 }
 
 export default function Events() {
   const { t, lang, locale } = useLang()
   const events = useApi(api.getEvents, [lang])
+  const { pos } = useUserLocation()
   const { mapRef, focus, focusOn, clearFocus } = useMapFocus()
-  const [sort, setSort] = useState('date') // 'date' | 'popular'
+  const [sort, setSort] = useState('date') // 'date' | 'popular' | 'nearest'
   const [category, setCategory] = useState('all')
 
   const categories = useMemo(
@@ -22,12 +27,14 @@ export default function Events() {
     [events.data],
   )
 
+  const origin = pos ?? SYNTAGMA
   const list = useMemo(() => {
     const rows = (events.data ?? []).filter((e) => category === 'all' || e.category === category)
+    if (sort === 'nearest') return rows.sort((a, b) => distanceM(origin, a) - distanceM(origin, b))
     return sort === 'popular'
       ? rows.sort((a, b) => (b.popularity ?? -1) - (a.popularity ?? -1))
       : rows.sort((a, b) => a.date.localeCompare(b.date))
-  }, [events.data, sort, category])
+  }, [events.data, sort, category, origin])
 
   const compact = (n) => new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(n)
 
@@ -46,11 +53,12 @@ export default function Events() {
         title={t('events.upcoming')}
         bodyClassName="px-3 py-1 sm:px-4"
         action={
-          // sorting by popularity only when the data has it (the real events feed does not)
-          (events.data ?? []).some((e) => e.popularity != null) && <div role="group" aria-label={t('events.sortBy')} className="flex rounded-full bg-primary/10 p-0.5 text-xs font-semibold">
+          <div role="group" aria-label={t('events.sortBy')} className="flex rounded-full bg-primary/10 p-0.5 text-xs font-semibold">
             {[
               ['date', t('events.sortDate')],
-              ['popular', t('events.sortPopular')],
+              ['nearest', t('events.sortNearest')],
+              // sorting by popularity only when the data has it (the real events feed does not)
+              ...((events.data ?? []).some((e) => e.popularity != null) ? [['popular', t('events.sortPopular')]] : []),
             ].map(([id, label]) => (
               <button
                 key={id}
@@ -107,7 +115,18 @@ export default function Events() {
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium leading-snug text-ink">{e.title}</p>
+                    {e.url ? (
+                      <a
+                        href={e.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium leading-snug text-ink underline-offset-2 hover:underline"
+                      >
+                        {e.title}
+                      </a>
+                    ) : (
+                      <p className="font-medium leading-snug text-ink">{e.title}</p>
+                    )}
                     <p className="truncate text-sm text-muted">
                       {e.venue === e.area ? e.venue : `${e.venue} · ${e.area}`}
                     </p>

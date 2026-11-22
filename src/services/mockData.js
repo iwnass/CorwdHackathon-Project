@@ -45,6 +45,31 @@ const EV_STATIONS = [
 
 const stationName = (id, lang) => pick(STATIONS.find((s) => s.id === id).name, lang)
 
+// Real, well-known Municipality of Athens venues/places (approximate public coordinates)
+const PLACES = [
+  { kind: 'museum', name: { en: 'Acropolis Museum', el: 'Μουσείο Ακρόπολης' }, address: { en: 'Dionysiou Areopagitou 15', el: 'Διονυσίου Αρεοπαγίτου 15' }, lat: 37.9683, lng: 23.7283 },
+  { kind: 'museum', name: { en: 'National Archaeological Museum', el: 'Εθνικό Αρχαιολογικό Μουσείο' }, address: { en: '44 Patission St', el: 'Πατησίων 44' }, lat: 37.9893, lng: 23.7324 },
+  { kind: 'museum', name: { en: 'Benaki Museum', el: 'Μουσείο Μπενάκη' }, address: { en: 'Koumbari 1', el: 'Κουμπάρη 1' }, lat: 37.9797, lng: 23.7439 },
+  { kind: 'gallery', name: { en: 'National Gallery', el: 'Εθνική Πινακοθήκη' }, address: { en: 'Vasileos Konstantinou 50', el: 'Λεωφ. Βασιλέως Κωνσταντίνου 50' }, lat: 37.9707, lng: 23.7534 },
+  { kind: 'theatre', name: { en: 'National Theatre of Greece', el: 'Εθνικό Θέατρο' }, address: { en: 'Agiou Konstantinou 22', el: 'Αγίου Κωνσταντίνου 22' }, lat: 37.9847, lng: 23.7256 },
+  { kind: 'cultural_centre', name: { en: 'Technopolis Gazi', el: 'Τεχνόπολις Γκάζι' }, address: { en: 'Pireos 100', el: 'Πειραιώς 100' }, lat: 37.9786, lng: 23.7121 },
+  { kind: 'cultural_centre', name: { en: 'Onassis Stegi', el: 'Στέγη Ιδρύματος Ωνάση' }, address: { en: 'Leof. Syngrou 107', el: 'Λεωφ. Συγγρού 107' }, lat: 37.9636, lng: 23.7363 },
+  { kind: 'cultural_centre', name: { en: 'Athens Concert Hall (Megaron)', el: 'Μέγαρο Μουσικής Αθηνών' }, address: { en: 'Vasilissis Sofias & Kokkali 1', el: 'Βασιλισσής Σοφίας & Κόκκαλη 1' }, lat: 37.9752, lng: 23.7638 },
+  { kind: 'library', name: { en: 'National Library of Greece', el: 'Εθνική Βιβλιοθήκη της Ελλάδος' }, address: { en: 'Panepistimiou 32', el: 'Πανεπιστημίου 32' }, lat: 37.9838, lng: 23.7325 },
+  { kind: 'cinema', name: { en: 'Cine Paris', el: 'Σινε Παρίς' }, address: { en: 'Kydathinaion 22, Plaka', el: 'Κυδαθηναίων 22, Πλάκα' }, lat: 37.9715, lng: 23.7290 },
+  { kind: 'place', name: { en: 'Syntagma Square', el: 'Πλατεία Συντάγματος' }, lat: 37.9755, lng: 23.7348 },
+  { kind: 'place', name: { en: 'Monastiraki Square', el: 'Πλατεία Μοναστηρακίου' }, lat: 37.9759, lng: 23.7257 },
+  { kind: 'place', name: { en: 'Kotzia Square', el: 'Πλατεία Κοτζιά' }, lat: 37.9838, lng: 23.7278 },
+  { kind: 'free_wifi', name: { en: 'Syntagma Square Free WiFi', el: 'Δωρεάν WiFi Πλ. Συντάγματος' }, lat: 37.9755, lng: 23.7348 },
+  { kind: 'free_wifi', name: { en: 'Thission Free WiFi', el: 'Δωρεάν WiFi Θησείο' }, lat: 37.9723, lng: 23.7205 },
+  { kind: 'accessible_parking', name: { en: 'Syntagma accessible parking', el: 'Θέση ΑΜΕΑ Σύνταγμα' }, address: { en: 'Amalias Ave', el: 'Λεωφ. Αμαλίας' }, lat: 37.9745, lng: 23.7355 },
+  { kind: 'accessible_parking', name: { en: 'Omonia accessible parking', el: 'Θέση ΑΜΕΑ Ομόνοια' }, address: { en: 'Athinas St', el: 'Οδός Αθηνάς' }, lat: 37.9838, lng: 23.7281 },
+  // cool-down spots (Heat page): fountains, pocket parks, pools
+  { kind: 'fountain', name: { en: 'Syntagma Square Fountain', el: 'Βρύση Πλ. Συντάγματος' }, lat: 37.9752, lng: 23.7345 },
+  { kind: 'pocket_park', name: { en: 'Kypseli Pocket Park', el: 'Πάρκο Τσέπης Κυψέλης' }, lat: 38.0005, lng: 23.7425 },
+  { kind: 'pool', name: { en: 'Athens Municipal Pool', el: 'Δημοτικό Κολυμβητήριο Αθηνών' }, lat: 37.9950, lng: 23.7500 },
+]
+
 export const mock = {
   // GET /events?lang=
   async getEvents(lang = 'en') {
@@ -63,6 +88,21 @@ export const mock = {
       currency: 'EUR',
       popularity: e.popularity, // 0–100 popularity rate
       interested: e.interested, // people interested / going
+      // no real ticket page for demo events: search link, not a fabricated URL
+      url: `https://www.google.com/search?q=${encodeURIComponent(`${pick(e.title, lang)} ${pick(e.venue, lang)}`)}`,
+    }))
+  },
+
+  // GET /places?lang=
+  async getPlaces(lang = 'en') {
+    await delay()
+    return PLACES.map((p) => ({
+      kind: p.kind,
+      name: pick(p.name, 'el'), // Greek name, same as the real city GIS
+      name_en: pick(p.name, 'en'),
+      address: p.address ? pick(p.address, lang) : null,
+      lat: p.lat,
+      lng: p.lng,
     }))
   },
 
@@ -93,6 +133,27 @@ export const mock = {
         status: offline ? 'offline' : available > 0 ? 'available' : 'busy',
       }
     })
+  },
+
+  // GET /heat + /zones
+  async getHeat() {
+    await delay()
+    const level = (t) => (t >= 41 ? 'extreme_danger' : t >= 38 ? 'danger' : t >= 35 ? 'extreme_caution' : t >= 32 ? 'caution' : 'none')
+    const curve = (h) => 24 + (h >= 11 && h <= 18 ? 10 : 0) + Math.sin((h / 24) * Math.PI * 2) * 3
+    const now = Date.now() - (Date.now() % 3600000)
+    const hourly = Array.from({ length: 24 }, (_, h) => {
+      const t = curve(h) + rand(-1, 1)
+      return { time: now - (23 - h) * 3600000, temperature_avg: t, feels_like_avg: t + 2 }
+    })
+    const cityTemp = hourly[hourly.length - 1].temperature_avg
+    return {
+      city: { temperature_avg: cityTemp, feels_like_avg: cityTemp + 2, heat_level: level(cityTemp) },
+      hourly,
+      zones: Array.from({ length: 7 }, (_, i) => {
+        const t = cityTemp + rand(-2, 2)
+        return { district_id: i + 1, heat: { temperature_avg: t, heat_level: level(t) } }
+      }),
+    }
   },
 
   // GET /ev?history=1

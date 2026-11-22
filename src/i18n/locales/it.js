@@ -23,6 +23,7 @@ export default {
   'settings.dark': 'Scura',
   'settings.colors': 'Colori',
   'settings.language': 'Lingua',
+  'settings.heatmap': 'Sezione calore',
 
   'map.title': 'Mappa del Comune di Atene',
   'map.loading': 'Caricamento mappa…',
@@ -105,6 +106,7 @@ export default {
   'events.sortBy': "Ordina per",
   'events.sortDate': "Data",
   'events.sortPopular': "Più popolari",
+  'events.sortNearest': "Più vicini",
   'events.all': "Tutti",
   'events.tickets': "Biglietti",
 

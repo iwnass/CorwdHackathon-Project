@@ -11,6 +11,7 @@ import { ListSkeleton } from '../components/ui/Skeleton'
 import { useApi } from '../hooks/useApi'
 import { useMapFocus } from '../hooks/useMapFocus'
 import { useUserLocation } from '../hooks/useUserLocation'
+import { useTheme } from '../context/ThemeContext'
 import { useLang } from '../i18n/LanguageContext'
 import { api } from '../services/api'
 import { distanceM } from '../utils/transit'
@@ -26,6 +27,7 @@ export default function Heat() {
   const heat = useApi(api.getHeat, [], { refreshMs: TEN_MIN })
   const places = useApi(api.getPlaces, [])
   const { pos } = useUserLocation()
+  const { showHeatmap } = useTheme()
   const { mapRef, focus, focusOn, clearFocus } = useMapFocus()
 
   const origin = pos ?? SYNTAGMA
@@ -50,9 +52,9 @@ export default function Heat() {
         focus={focus}
         onClearFocus={clearFocus}
         loadingData={heat.loading}
-        chips={cool.map((p, i) => ({ id: `cool-${i}`, lat: p.lat, lng: p.lng, label: `${t(`kind.${p.kind}`)} · ${formatDist(p.dist)}`, color: '#0ea5e9' }))}
+        chips={showHeatmap ? cool.map((p, i) => ({ id: `cool-${i}`, lat: p.lat, lng: p.lng, label: `${t(`kind.${p.kind}`)} · ${formatDist(p.dist)}`, color: '#0ea5e9' })) : []}
         overlay={
-          city && (
+          showHeatmap && city && (
             <div>
               <p className="text-xs text-muted">{t('heat.now')}</p>
               <p className="flex items-baseline gap-1.5">

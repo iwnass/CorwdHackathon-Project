@@ -23,6 +23,7 @@ export default {
   'settings.dark': '深色',
   'settings.colors': '顏色',
   'settings.language': '語言',
+  'settings.heatmap': '熱度版塊',
 
   'map.title': '雅典市地圖',
   'map.loading': '地圖載入中…',
@@ -105,6 +106,7 @@ export default {
   'events.sortBy': "排序",
   'events.sortDate': "日期",
   'events.sortPopular': "最熱門",
+  'events.sortNearest': "最近",
   'events.all': "全部",
   'events.tickets': "門票",
 

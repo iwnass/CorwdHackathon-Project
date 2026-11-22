@@ -23,6 +23,7 @@ export default {
   'settings.dark': 'Σκοτεινή',
   'settings.colors': 'Χρώματα',
   'settings.language': 'Γλώσσα',
+  'settings.heatmap': 'Ενότητα θερμότητας',
 
   'map.title': 'Χάρτης του Δήμου Αθηναίων',
   'map.loading': 'Φόρτωση χάρτη…',
@@ -105,6 +106,7 @@ export default {
   'events.sortBy': "Ταξινόμηση",
   'events.sortDate': "Ημερομηνία",
   'events.sortPopular': "Πιο δημοφιλή",
+  'events.sortNearest': "Πιο κοντινά",
   'events.all': "Όλες",
   'events.tickets': "Εισιτήρια",
 

@@ -3,7 +3,7 @@ import { config } from '../../config'
 import { useLang } from '../../i18n/LanguageContext'
 import ChatPanel from '../chat/ChatPanel'
 import { CoffeeIcon } from '../ui/Icons'
-import { NAV_ITEMS } from './navItems'
+import { useNavItems } from './navItems'
 
 /**
  * Side navigation: links on top, the AI chat filling the space in the
@@ -13,13 +13,14 @@ import { NAV_ITEMS } from './navItems'
  */
 export default function Sidebar() {
   const { t } = useLang()
+  const items = useNavItems()
   return (
     <nav
       className="hidden w-64 shrink-0 flex-col border-e border-line bg-surface/80 backdrop-blur-md md:flex lg:w-72"
       aria-label={t('nav.main')}
     >
       <ul className="shrink-0 space-y-1 px-3 pt-4">
-        {NAV_ITEMS.map(({ to, key, icon: Icon }) => (
+        {items.map(({ to, key, icon: Icon }) => (
           <li key={to}>
             <NavLink
               to={to}

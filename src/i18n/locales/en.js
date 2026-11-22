@@ -25,6 +25,7 @@ export default {
   'settings.dark': 'Dark',
   'settings.colors': 'Colors',
   'settings.language': 'Language',
+  'settings.heatmap': 'Heat section',
 
   'map.title': 'Map of the Municipality of Athens',
   'map.loading': 'Loading map…',
@@ -107,6 +108,7 @@ export default {
   'events.sortBy': "Sort by",
   'events.sortDate': "Date",
   'events.sortPopular': "Most popular",
+  'events.sortNearest': "Nearest",
   'events.all': "All",
   'events.tickets': "Tickets",
 

@@ -15,6 +15,7 @@ import urllib.error
 import urllib.request
 
 from . import cooling, env
+from .geo import haversine
 
 BASE = os.environ.get("ATHENSGOV_SANDBOX_URL", "https://athensgov.cityofathens.gr/sandbox")
 MAX_TEXT = 2000  # the city bot rejects longer messages (422)
@@ -85,7 +86,7 @@ def _fold(s):
 # shortcut: keyword routing; swap for the sandbox NLU (/v1/nlu/parse) if it misroutes real questions
 TOPICS = [  # first match wins: "it's hot, where can I cool down?" is a cooling question
     ("cooling", ("δροσ", "βρυσ", "πιδακ", "κολυμβητ", "πισιν", "fountain", "cool down", "pool", "drosi", "vrysi", "pidak")),
-    ("heat", ("ζεστ", "θερμοκρασ", "καυσων", "heat", "hot", "temperature", "zest", "kafson", "kaysw", "thermokras")),
+    ("heat", ("θερμοκρασ", "καυσων", "heat", "hot", "temperature", "kafson", "kaysw", "thermokras")),
 ]
 HEAT_EL = {"none": "κανονική", "caution": "προσοχή", "extreme_caution": "αυξημένη προσοχή", "danger": "κίνδυνος",
            "extreme_danger": "μεγάλος κίνδυνος"}
@@ -95,6 +96,80 @@ KIND_EL = {"fountain": "Βρύση", "pocket_park": "Πάρκο τσέπης", "
 def topic(text):
     t = _fold(text)
     return next((name for name, words in TOPICS if any(w in t for w in words)), None)
+
+
+# Obvious off-app chit-chat, blocked before it ever reaches the city bot (real city-service questions —
+# fines, appointments, KEP, the 570 municipal services — still go through as before).
+OFF_TOPIC_WORDS = (
+    "write me a poem", "write a poem", "write me a song", "write a story", "write me code", "write some code",
+    "ποιημα", "τραγουδι", "γραψε μου μια ιστορια", "κωδικα για",
+    "python", "javascript", "typescript", "c++", " html", " css", " sql",
+    "translate this", "μεταφρασε",
+    "tell me a joke", "ένα αστειο", "ενα αστειο",
+    "capital of", "πρωτευουσα του",
+    "who won the world cup", "who is the president of", "ποιος ειναι ο προεδρος",
+    "ignore previous instructions", "ignore all instructions", "system prompt", "pretend you are", "act as a",
+    "solve this equation", "λυσε την εξισωση",
+    "recipe for", "συνταγη για",
+)
+
+
+def is_off_topic(text):
+    t = _fold(text)
+    return any(w in t for w in OFF_TOPIC_WORDS)
+
+
+def off_topic_answer(greek):
+    text = ("Μπορώ να βοηθήσω μόνο με θέματα της εφαρμογής — εκδηλώσεις, μέσα μαζικής μεταφοράς, φόρτιση EV & "
+            "πάρκινγκ, σημεία δροσιάς, αξιοθέατα, και υπηρεσίες του Δήμου Αθηναίων. Δοκίμασε κάτι από αυτά!"
+            if greek else
+            "I can only help with things in this app — events, public transit, EV charging & parking, "
+            "cool-down spots, places to visit, and City of Athens services. Try asking about one of those!")
+    return _reply("off_topic", text)
+
+
+def _is_search_dump(text):
+    """The sandbox's generic "found these documents on the website" fallback (a raw markdown link list)
+    when its rules engine has no real scripted answer — not an actual reply, so don't show it as one.
+    Seen in both Greek ("...βρήκα:") and English ("...I found:") phrasings."""
+    t = _fold(text or "")
+    return ("i found:" in t or "βρηκα:" in t) and "](http" in (text or "")
+
+
+def no_answer_reply(greek):
+    text = ("Δεν βρήκα συγκεκριμένη απάντηση για αυτό. Μπορώ να βοηθήσω με εκδηλώσεις, μέσα μαζικής μεταφοράς, "
+            "φόρτιση EV & πάρκινγκ, σημεία δροσιάς, αξιοθέατα, και υπηρεσίες του Δήμου Αθηναίων."
+            if greek else
+            "I don't have a direct answer for that. I can help with events, public transit, EV charging & "
+            "parking, cool-down spots, places to visit, and City of Athens services.")
+    return _reply("no_answer", text)
+
+
+# "How do I get to the Acropolis by metro?" is one of the three suggested quick questions (agent.s2 in every
+# locale) — answered here with the real nearby station (see transitData.js) instead of forwarding it to the
+# city bot, which has no fixed answer for it and was returning generic web-search-style links.
+AKROPOLI_STATION = {"lat": 37.9688, "lon": 23.7295}  # Akropoli station, Metro Line 2 (red)
+ACROPOLIS_ENTRANCE = {"lat": 37.9715, "lon": 23.7257}  # main archaeological site entrance
+_ACROPOLIS_WORDS = ("ακροπολ", "acropoli", "akropoli")
+_METRO_WORDS = ("μετρο", "metro", "υπογειο", "subway")
+
+
+def is_acropolis_metro_question(text):
+    t = _fold(text)
+    return any(w in t for w in _ACROPOLIS_WORDS) and any(w in t for w in _METRO_WORDS)
+
+
+def acropolis_metro_answer(greek):
+    walk_m = round(haversine(AKROPOLI_STATION["lat"], AKROPOLI_STATION["lon"],
+                              ACROPOLIS_ENTRANCE["lat"], ACROPOLIS_ENTRANCE["lon"]) / 10) * 10
+    card = {"type": "station", "title": "Akropoli",
+            "data": {"lat": AKROPOLI_STATION["lat"], "lng": AKROPOLI_STATION["lon"], "station_id": "akropoli"}}
+    text = (f"Πάρε τη **Γραμμή 2** (κόκκινη) του μετρό μέχρι τον σταθμό **Ακρόπολη** — η κύρια είσοδος του "
+            f"αρχαιολογικού χώρου είναι περίπου {walk_m} μ. με τα πόδια από εκεί."
+            if greek else
+            f"Take **Metro Line 2** (the red line) to **Akropoli** station — the main entrance to the "
+            f"archaeological site is about {walk_m} m on foot from there.")
+    return _reply("acropolis_metro", text, [card])
 
 
 def _reply(name, text, cards=()):
@@ -127,7 +202,7 @@ def local_answer(name, lat, lon, greek):
 
 
 # ---------- Entry point ----------
-def ask(text, conversation_id=None, lat=None, lon=None, engine=None, request=None):
+def ask(text, conversation_id=None, lat=None, lon=None, request=None):
     text = " ".join(str(text or "").split())
     if not text:
         raise ValueError("text is empty")
@@ -136,16 +211,22 @@ def ask(text, conversation_id=None, lat=None, lon=None, engine=None, request=Non
     if lat is not None:  # the data is neighbourhood-level; no need to send an exact position anywhere
         lat, lon = round(lat, 3), round(lon, 3)
 
+    greek = any("Ͱ" <= c <= "Ͽ" or "ἀ" <= c <= "῿" for c in text)
+    if is_off_topic(text):
+        return {**off_topic_answer(greek), "conversation_id": conversation_id, "truncated": truncated}
+    if is_acropolis_metro_question(text):
+        return {**acropolis_metro_answer(greek), "conversation_id": conversation_id, "truncated": truncated}
+
     name = topic(text)
     if name:
-        greek = any("Ͱ" <= c <= "Ͽ" or "ἀ" <= c <= "῿" for c in text)
         return {**local_answer(name, lat, lon, greek), "conversation_id": conversation_id, "truncated": truncated}
 
     msg = {"text": text}
     if lat is not None:
         msg["location"] = {"lat": lat, "lng": lon}
-    if engine in ("rules", "llm"):
-        msg["engine"] = engine
+    # always the rules engine (the registered municipal services), never the free-form "llm" engine:
+    # that one isn't scoped to the app's own services and shouldn't be reachable by a client-supplied field
+    msg["engine"] = "rules"
     for attempt in (1, 2):
         if not conversation_id:
             conversation_id = _call("POST", "/v1/conversations", {}, request)["id"]
@@ -156,4 +237,6 @@ def ask(text, conversation_id=None, lat=None, lon=None, engine=None, request=Non
             if e.status != 404 or attempt == 2:  # 404: the conversation expired or was reset → start a new one
                 raise
             conversation_id = None
+    if _is_search_dump(reply.get("text", "")):
+        return {**no_answer_reply(greek), "conversation_id": conversation_id, "truncated": truncated}
     return {**reply, "source": "athensgov", "conversation_id": conversation_id, "truncated": truncated}

@@ -23,6 +23,7 @@ export default {
   'settings.dark': 'Dunkel',
   'settings.colors': 'Farben',
   'settings.language': 'Sprache',
+  'settings.heatmap': 'Hitze-Bereich',
 
   'map.title': 'Karte der Gemeinde Athen',
   'map.loading': 'Karte wird geladen…',
@@ -105,6 +106,7 @@ export default {
   'events.sortBy': "Sortieren nach",
   'events.sortDate': "Datum",
   'events.sortPopular': "Am beliebtesten",
+  'events.sortNearest': "Am nächsten",
   'events.all': "Alle",
   'events.tickets': "Tickets",
 

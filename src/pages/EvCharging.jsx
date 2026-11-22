@@ -16,7 +16,8 @@ import { api } from '../services/api'
 import { distanceM } from '../utils/transit'
 
 const TWO_MIN = 2 * 60 * 1000
-const TOP = 12 // chips and bar chart: a few hundred real chargers would be unreadable
+const TOP = 12 // bar chart: a few hundred real chargers would be unreadable
+const MAP_TOP = 5 // map chips: keep the map itself uncluttered
 const NEAREST = 3 // shown at once; the rest open with the arrow
 const PARKING_COLOR = '#2563eb'
 const SYNTAGMA = { lat: 37.9755, lng: 23.7348 }
@@ -79,8 +80,8 @@ export default function EvCharging() {
           color: EV_STATUS[s.status].color,
           title: t(EV_STATUS[s.status].key),
         })).concat(
-          lots.slice(0, 8).map((p) => ({ id: p.id, lat: p.lat, lng: p.lng, label: `P · ${lotName(p)}`, color: PARKING_COLOR, title: t('parking.title') })),
-        )}
+          lots.map((p) => ({ id: p.id, lat: p.lat, lng: p.lng, label: `P · ${lotName(p)}`, color: PARKING_COLOR, title: t('parking.title') })),
+        ).slice(0, MAP_TOP)}
         overlay={
           <div>
             <p className="text-xs text-muted">{t('ev.title')}</p>

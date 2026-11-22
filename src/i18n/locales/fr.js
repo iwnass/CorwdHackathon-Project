@@ -23,6 +23,7 @@ export default {
   'settings.dark': 'Sombre',
   'settings.colors': 'Couleurs',
   'settings.language': 'Langue',
+  'settings.heatmap': 'Section chaleur',
 
   'map.title': 'Carte de la municipalité d’Athènes',
   'map.loading': 'Chargement de la carte…',
@@ -105,6 +106,7 @@ export default {
   'events.sortBy': "Trier par",
   'events.sortDate': "Date",
   'events.sortPopular': "Les plus populaires",
+  'events.sortNearest': "Les plus proches",
   'events.all': "Tous",
   'events.tickets': "Billets",
 

@@ -21,12 +21,13 @@ export function locate() {
   )
 }
 
-let checked = false
 export function useUserLocation() {
   const s = useSyncExternalStore((f) => (listeners.add(f), () => listeners.delete(f)), () => state)
   useEffect(() => {
-    if (checked) return
-    checked = true
+    // Re-checked on every page's map mount (not just once per app load): if the first
+    // attempt never got a position (permission still pending, a slow/failed GPS fix…),
+    // switching tabs should pick it up as soon as it's granted, without needing a refresh.
+    if (state.status !== 'idle') return
     navigator.permissions
       ?.query({ name: 'geolocation' })
       .then((r) => r.state === 'granted' && locate())

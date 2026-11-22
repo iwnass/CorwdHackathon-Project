@@ -23,6 +23,7 @@ export default {
   'settings.dark': 'Тёмный',
   'settings.colors': 'Цвета',
   'settings.language': 'Язык',
+  'settings.heatmap': 'Раздел жары',
 
   'map.title': 'Карта муниципалитета Афин',
   'map.loading': 'Загрузка карты…',
@@ -105,6 +106,7 @@ export default {
   'events.sortBy': "Сортировать",
   'events.sortDate': "По дате",
   'events.sortPopular': "Самые популярные",
+  'events.sortNearest': "Ближайшие",
   'events.all': "Все",
   'events.tickets': "Билеты",
 

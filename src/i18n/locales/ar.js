@@ -23,6 +23,7 @@ export default {
   'settings.dark': 'داكن',
   'settings.colors': 'الألوان',
   'settings.language': 'اللغة',
+  'settings.heatmap': 'قسم الحرارة',
 
   'map.title': 'خريطة بلدية أثينا',
   'map.loading': 'جارٍ تحميل الخريطة…',
@@ -105,6 +106,7 @@ export default {
   'events.sortBy': "ترتيب حسب",
   'events.sortDate': "التاريخ",
   'events.sortPopular': "الأكثر شعبية",
+  'events.sortNearest': "الأقرب",
   'events.all': "الكل",
   'events.tickets': "التذاكر",
 

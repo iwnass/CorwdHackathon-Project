@@ -4,12 +4,13 @@ import GradientWaves from '../components/landing/GradientWaves'
 import ParthenonBackdrop from '../components/landing/ParthenonBackdrop'
 import StickerBomb from '../components/landing/StickerBomb'
 import LanguageSwitch from '../components/layout/LanguageSwitch'
-import { NAV_ITEMS } from '../components/layout/navItems'
+import { useNavItems } from '../components/layout/navItems'
 import { useLang } from '../i18n/LanguageContext'
 
 // First screen the user sees. The buttons open the app's sections.
 export default function Landing() {
   const { t } = useLang()
+  const items = useNavItems()
 
   return (
     <div className="relative h-full overflow-y-auto bg-[#120f17] font-landing text-[#f1ecfa]">
@@ -30,7 +31,7 @@ export default function Landing() {
           <p className="m-0 max-w-[34ch] text-lg leading-normal text-[#d6cfe6]">{t('landing.tagline')}</p>
 
           <nav aria-label={t('landing.links')} className="flex flex-wrap justify-center gap-3">
-            {NAV_ITEMS.map(({ to, key, icon: Icon }) => (
+            {items.map(({ to, key, icon: Icon }) => (
               <Link
                 key={to}
                 to={to}

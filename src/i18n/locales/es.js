@@ -23,6 +23,7 @@ export default {
   'settings.dark': 'Oscuro',
   'settings.colors': 'Colores',
   'settings.language': 'Idioma',
+  'settings.heatmap': 'Sección de calor',
 
   'map.title': 'Mapa del Municipio de Atenas',
   'map.loading': 'Cargando mapa…',
@@ -105,6 +106,7 @@ export default {
   'events.sortBy': "Ordenar por",
   'events.sortDate': "Fecha",
   'events.sortPopular': "Más populares",
+  'events.sortNearest': "Más cercanos",
   'events.all': "Todos",
   'events.tickets': "Entradas",
 

@@ -23,6 +23,7 @@ export default {
   'settings.dark': 'ダーク',
   'settings.colors': 'カラー',
   'settings.language': '言語',
+  'settings.heatmap': '気温セクション',
 
   'map.title': 'アテネ市の地図',
   'map.loading': '地図を読み込み中…',
@@ -105,6 +106,7 @@ export default {
   'events.sortBy': "並べ替え",
   'events.sortDate': "日付",
   'events.sortPopular': "人気順",
+  'events.sortNearest': "近い順",
   'events.all': "すべて",
   'events.tickets': "チケット",
 

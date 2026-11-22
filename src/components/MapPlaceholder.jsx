@@ -75,22 +75,20 @@ function TileMap({ target, zoom, chips, focus, user, userLabel, onLoad }) {
     })
   }, [pointsKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // "you are here": an Apple Find My-style pulsing dot instead of a pin
+  // "you are here": an Apple Find My-style pulsing dot instead of a pin.
+  // Always remove-then-recreate (like the chip markers above) instead of an update-in-place:
+  // React's dev-mode double-mount destroys the first map instance, and a marker kept across
+  // that via a "create once, then just setLngLat" guard is left pointing at the dead map —
+  // it never lands on the map that's actually on screen until a full refresh.
   useEffect(() => {
-    if (!user) {
-      userMarker.current?.remove()
-      userMarker.current = null
-      return
-    }
-    if (!userMarker.current) {
-      const el = document.createElement('div')
-      el.className = 'locate-dot'
-      el.innerHTML = '<span class="locate-dot__pulse"></span><span class="locate-dot__core"></span>'
-      el.title = userLabel ?? ''
-      userMarker.current = new Marker({ element: el, anchor: 'center' }).setLngLat([user.lng, user.lat]).addTo(map.current)
-    } else {
-      userMarker.current.setLngLat([user.lng, user.lat])
-    }
+    userMarker.current?.remove()
+    userMarker.current = null
+    if (!user) return
+    const el = document.createElement('div')
+    el.className = 'locate-dot'
+    el.innerHTML = '<span class="locate-dot__pulse"></span><span class="locate-dot__core"></span>'
+    el.title = userLabel ?? ''
+    userMarker.current = new Marker({ element: el, anchor: 'center' }).setLngLat([user.lng, user.lat]).addTo(map.current)
   }, [user?.lat, user?.lng, userLabel]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return <div ref={box} className="h-full w-full" />
