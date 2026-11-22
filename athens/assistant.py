@@ -8,13 +8,15 @@ per message, "engine": "llm" 20/min and 1000 messages/day.
 import json
 import math
 import os
+import re
 import threading
 import time
 import unicodedata
 import urllib.error
 import urllib.request
+from collections import Counter
 
-from . import cooling, culture, env, events
+from . import cooling, culture, env, events, metro
 from .geo import haversine
 
 BASE = os.environ.get("ATHENSGOV_SANDBOX_URL", "https://athensgov.cityofathens.gr/sandbox")
@@ -226,6 +228,138 @@ def events_today_answer(greek, limit=5):
     return _reply("events_today", "\n".join([head, *lines]), cards)
 
 
+# ---------- Metro & tram: from the STASY timetable (metro.py), never forwarded to the city bot ----------
+# Buses and ticket prices aren't in our data: those questions still go to the city bot.
+_TRANSIT_WORDS = ("μετρο", "τραμ", "τρενο", "σταθμο", "συρμο", "δρομολογ", "γραμμη", "γραμμες", "συγκοινων",
+                  "metro", "subway", "tram", "train", "station", "transport")
+_NIGHT_WORDS = ("ολη τη νυχτα", "ολονυχτ", "24ωρ", "24 ωρ", "all night", "24 hour", "24/7", "overnight")
+_NEAR_WORDS = ("κοντινοτερ", "πλησιεστερ", "κοντα μου", "nearest", "closest", "near me", "nearby")
+_SKIP_WORDS = ("εισιτηρ", "ticket", "fare", "λεωφορ", "bus", "τρολε", "trolley")
+ALL_NIGHT = ("M2", "M3", "T6", "T7")  # every Saturday night, as the app's Saturday reminder says
+LINE_NAME = {"el": {"M1": "Γραμμή 1 (πράσινη)", "M2": "Γραμμή 2 (κόκκινη)", "M3": "Γραμμή 3 (μπλε)", "T6": "Τραμ T6", "T7": "Τραμ T7"},
+             "en": {"M1": "Line 1 (green)", "M2": "Line 2 (red)", "M3": "Line 3 (blue)", "T6": "Tram T6", "T7": "Tram T7"}}
+
+
+def is_transit_question(text):
+    t = _fold(text)
+    return any(w in t for w in _TRANSIT_WORDS) and not any(w in t for w in _SKIP_WORDS)
+
+
+def _stations_in(text):
+    """Stations named in the text (Greek or Latin, any case ending): the longest match, every line's stop of that name."""
+    t, best, found = _fold(text), 0, []
+    for s in metro.data()["stations"]:
+        for name in {_fold(s["name"]), _fold(metro.station(s)["name_en"] or "")}:
+            stem = name[:-1] if len(name) >= 6 else name  # «Πειραιάς» → also «στον Πειραιά»
+            if len(stem) < 4 or not re.search(r"(?<!\w)" + re.escape(stem), t):
+                continue
+            if len(stem) > best:
+                best, found = len(stem), [s]
+            elif len(stem) == best and s not in found:
+                found.append(s)
+    return found
+
+
+def _timetable_note(greek):
+    valid = metro.info()["timetable_valid"]
+    return (f"Εκτίμηση από το ωράριο της ΣΤΑΣΥ (ισχύς {valid}) — όχι ζωντανά δεδομένα." if greek
+            else f"Estimated from the STASY timetable (valid {valid}) — not live data.")
+
+
+def _station_answer(stations, greek):
+    lang = "el" if greek else "en"
+    deps = [dep for s in stations for dep in metro.departures(s["id"])]
+    # main directions only (short runs leaving hours from now are noise); late at night, whatever runs next
+    shown = [d for d in deps if d["in_min"] and d["in_min"][0] <= 90] or [d for d in deps if d["in_min"]][:4]
+
+    def when(m):
+        if m == 0:
+            return "τώρα" if greek else "now"
+        return f"σε {m}′" if greek else f"in {m} min"
+
+    rows = []
+    for dep in shown:
+        towards = dep["towards"] if greek else dep["towards_en"]
+        soon = ", ".join(f"{t} ({when(m)})" for t, m in zip(dep["next"][:2], dep["in_min"][:2]))
+        last = f"τελευταίο {dep['last']}" if greek else f"last {dep['last']}"
+        rows.append(f"- **{LINE_NAME[lang].get(dep['line'], dep['line'])} → {towards}**: {soon} · {last}")
+    if not rows:
+        first = min((d["first"] for d in deps), default=None)
+        if first:
+            rows = [f"Δεν υπάρχουν άλλα δρομολόγια σήμερα. Το πρώτο αύριο: {first}." if greek
+                    else f"No more trains today. The first one tomorrow: {first}."]
+        else:
+            rows = ["Δεν βρήκα δρομολόγια για σήμερα." if greek else "I couldn't find any trains for today."]
+
+    name = stations[0]["name"] if greek else metro.station(stations[0])["name_en"]
+    head = f"Επόμενα δρομολόγια στον σταθμό **{name}**:" if greek else f"Next trains at **{name}**:"
+    cards = [{"type": "station", "title": s["name"], "data": {"lat": s["lat"], "lng": s["lon"], "station_id": s["id"]}}
+             for s in stations]
+    return _reply("metro_station", "\n".join([head, *rows, _timetable_note(greek)]), cards)
+
+
+def _night_answer(greek):
+    saturday = events.when_range("today")[0].weekday() == 5
+    lines = ", ".join(LINE_NAME["el" if greek else "en"][x] for x in ALL_NIGHT)
+    if greek:
+        text = (f"Μόνο τα Σάββατα: όλη τη νύχτα λειτουργούν {lines}. Η Γραμμή 1 και τα τρένα για το αεροδρόμιο όχι.\n"
+                + ("Σήμερα είναι Σάββατο — απόψε λειτουργούν όλη τη νύχτα!" if saturday
+                   else "Σήμερα δεν είναι Σάββατο: απόψε το μετρό κλείνει μετά τα τελευταία δρομολόγια. "
+                        "Ρώτα με για έναν σταθμό για να δεις το τελευταίο."))
+    else:
+        text = (f"Only on Saturdays: {lines} run all night. Line 1 and the airport trains don't.\n"
+                + ("Today is Saturday — they run all night tonight!" if saturday
+                   else "Today isn't Saturday: tonight the metro closes after its last trains. "
+                        "Ask me about a station to see its last train."))
+    return _reply("metro_night", text)
+
+
+def _nearest_answer(lat, lon, greek):
+    if lat is None:
+        return {**_reply("metro_near", "Χρειάζομαι την τοποθεσία σου για να απαντήσω." if greek
+                         else "I need your location to answer that."), "state": {"awaiting": "location"}}
+    near = metro.near(lat, lon, radius_m=2000, k=2)
+    if not near:
+        return _reply("metro_near", "Δεν υπάρχει σταθμός μετρό ή τραμ σε απόσταση 2 χλμ." if greek
+                      else "There's no metro or tram station within 2 km.")
+    rows = [f"- **{s['name'] if greek else s['name_en']}**: {', '.join(s['lines'])} · {s['distance_m']} m"
+            + (" · χωρίς σκάλες" if greek else " · step-free") * bool(s["step_free"]) for s in near]
+    cards = [{"type": "station", "title": s["name"], "data": {"lat": s["lat"], "lng": s["lon"], "station_id": s["id"]}}
+             for s in near]
+    head = "Οι κοντινότεροι σταθμοί:" if greek else "Nearest stations:"
+    return _reply("metro_near", "\n".join([head, *rows]), cards)
+
+
+def _lines_answer(greek):
+    """Each line with its two most frequent destinations (its ends), from the timetable itself."""
+    counts = {}
+    for by_station in metro.data()["departures"]["weekday"].values():
+        for key, times in by_station.items():
+            line, towards = key.split("|", 1)
+            counts.setdefault(line, Counter())[towards] += len(times)
+    lang = "el" if greek else "en"
+    rows = []
+    for line in sorted(counts):
+        ends = [t if greek else metro.transliterate(t) for t, _ in counts[line].most_common(2)]
+        rows.append(f"- **{LINE_NAME[lang].get(line, line)}**: {' ↔ '.join(ends)}")
+    head = "Οι γραμμές μετρό και τραμ της Αθήνας:" if greek else "Athens metro and tram lines:"
+    tip = ("Ρώτα με π.χ. «επόμενο μετρό στο Σύνταγμα» ή «κοντινότερος σταθμός»." if greek
+           else "Ask me e.g. \"next metro at Syntagma\" or \"nearest station\".")
+    return _reply("metro_lines", "\n".join([head, *rows, tip]))
+
+
+def transit_answer(text, lat, lon, greek):
+    stations = _stations_in(text)
+    if stations:
+        return _station_answer(stations, greek)
+    t = _fold(text)
+    if any(w in t for w in _NIGHT_WORDS):
+        return _night_answer(greek)
+    if any(w in t for w in _NEAR_WORDS):
+        return _nearest_answer(lat, lon, greek)
+    return _lines_answer(greek)
+
+
 def _reply(name, text, cards=()):
     return {"source": "athens-pulse", "text": text, "speech": text.replace("**", ""),
             "intent": {"name": name, "confidence": 1.0}, "cards": list(cards), "suggestions": []}
@@ -272,6 +406,8 @@ def ask(text, conversation_id=None, lat=None, lon=None, request=None):
         return {**acropolis_metro_answer(greek), "conversation_id": conversation_id, "truncated": truncated}
     if is_events_today_question(text):
         return {**events_today_answer(greek), "conversation_id": conversation_id, "truncated": truncated}
+    if is_transit_question(text):
+        return {**transit_answer(text, lat, lon, greek), "conversation_id": conversation_id, "truncated": truncated}
 
     name = topic(text)
     if name:
