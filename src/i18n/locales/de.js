@@ -47,6 +47,7 @@ export default {
   'ev.title': 'Ladestationen für E-Autos',
   'ev.free': 'Freie Ladepunkte pro Station',
   'ev.occupancy': 'Auslastung der Ladepunkte heute (%)',
+  'ev.collecting': "Daten werden gesammelt – die Auslastungskurve füllt sich im Laufe des Tages.",
   'ev.list': 'Stationen',
   'ev.available': 'frei',
   'ev.busy': 'Belegt',

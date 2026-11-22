@@ -49,6 +49,7 @@ export default {
   'ev.title': 'EV charging stations',
   'ev.free': 'Free chargers per station',
   'ev.occupancy': 'Charger occupancy today (%)',
+  'ev.collecting': "Collecting data — the occupancy curve fills in over the day.",
   'ev.list': 'Stations',
   'ev.available': 'available',
   'ev.busy': 'Busy',

@@ -13,7 +13,9 @@ export async function http(path, { method = 'GET', body, params, signal } = {}) 
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    throw new Error(`API ${method} ${path} failed (${res.status}): ${text}`)
+    const err = new Error(`API ${method} ${path} failed (${res.status}): ${text}`)
+    err.status = res.status
+    throw err
   }
   return res.status === 204 ? null : res.json()
 }
