@@ -28,10 +28,31 @@ let conversationId = null // the city assistant keeps the dialogue on its side
 
 const real = {
   // GET /api/events (Ticketmaster): one entry per show (its next performance)
+  // + GET /api/culture: the City of Athens' own events (cultureisathens.gr). Either source may fail alone.
   getEvents: async () => {
-    const r = await http('/events', { params: { days: 60, limit: 200 } })
+    const [tm, city] = await Promise.allSettled([
+      http('/events', { params: { days: 60, limit: 200 } }),
+      http('/culture'),
+    ])
+    if (tm.status === 'rejected' && city.status === 'rejected') throw tm.reason
+    const cityEvents = (city.value?.events ?? []).map((e) => ({
+      id: `city-${e.url}`,
+      date: e.date,
+      title: e.title,
+      venue: e.venue || 'Δήμος Αθηναίων',
+      area: e.venue || 'Δήμος Αθηναίων',
+      lat: e.lat,
+      lng: e.lon,
+      type: e.category || 'City of Athens',
+      category: 'City of Athens',
+      pricePerPerson: e.free ? 0 : null,
+      currency: 'EUR',
+      popularity: null,
+      interested: null,
+      url: e.url,
+    }))
     const seen = new Set()
-    return r.events
+    return cityEvents.concat((tm.value?.events ?? [])
       .filter((e) => !seen.has(`${e.name}|${e.venue.name}`) && seen.add(`${e.name}|${e.venue.name}`))
       .map((e) => ({
         id: e.id,
@@ -49,7 +70,7 @@ const real = {
         interested: null,
         url: e.url,
         status: e.status,
-      }))
+      })))
   },
 
   // GET /api/metro: real station coordinates and lines. Line timetables stay the curated list in transitData.js
